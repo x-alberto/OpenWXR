@@ -117,7 +117,7 @@ XPluginStart(char *name, char *sig, char *desc)
 	log_init(XPLMDebugString, "OpenWXR");
 	crc64_init();
 	crc64_srand(microclock());
-	logMsg("This is OpenWXR (" PLUGIN_VERSION ") libacfutils-%s",
+	logMsg("This is OpenWXR (%s) libacfutils-%s", ("PLUGIN_VERSION"),
 	    libacfutils_version);
 
 	/* Always use Unix-native paths on the Mac! */

@@ -107,6 +107,7 @@ typedef struct {
 	unsigned		num_colors;
 	wxr_color_t		colors[MAX_COLORS];
 	wxr_color_t		base_colors[MAX_COLORS];
+	bool_t is_wxr;
 } mode_aux_info_t;
 
 struct wxr_sys_s {
@@ -352,6 +353,7 @@ floop_cb(float d_t, float elapsed, int counter, void *refcon)
 	new_mode = MIN(new_mode, sys.num_modes - 1);
 	delayed_ctl_set(&sys.mode_ctl, new_mode);
 	sys.cur_mode = delayed_ctl_geti(&sys.mode_ctl);
+
 	mutex_exit(&sys.mode_lock);
 
 	mode = &sys.modes[sys.cur_mode];
@@ -484,6 +486,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	char buf[16];
 	double dashes[] = { 5, 5 };
 	char mode_name[16];
+	float gain = 0.0;
 
 	cairo_set_source_rgb(cr, CYAN_RGB(scr));
 	cairo_set_line_width(cr, 1);
@@ -520,7 +523,9 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	    LINE_HEIGHT, TEXT_ALIGN_LEFT);
 	cairo_show_text(cr, mode_name);
 
-	snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
+		DELAYED_DR_OP(&sys.gain_dr,
+	    gain = dr_getf(&sys.gain_dr.dr));
+	snprintf(buf, sizeof (buf), "GAIN %2.0f", gain*10 ); //snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
 	align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET,
 	    TEXT_ALIGN_RIGHT);
 	cairo_show_text(cr, buf);
@@ -642,6 +647,9 @@ parse_conf_file(const conf_t *conf)
 
 		if (conf_get_str_v(conf, "mode/%d/name", &str, i))
 			strlcpy(aux->name, str, sizeof (aux->name));
+
+        if(!conf_get_b_v(conf, "mode/%d/is_wxr", &aux->is_wxr, i))
+            aux->is_wxr = B_TRUE;
 	}
 
 	if (conf_get_str(conf, "power_dr", &str))
@@ -712,6 +720,11 @@ parse_conf_file(const conf_t *conf)
 		    NULL, render_cb, NULL, scr);
 		scr->sys = &sys;
 	}
+}
+
+bool_t get_mode()
+{
+    return sys.aux[sys.cur_mode].is_wxr;
 }
 
 bool_t

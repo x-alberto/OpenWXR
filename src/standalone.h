@@ -25,6 +25,7 @@
 extern "C" {
 #endif
 
+bool_t get_mode();
 bool_t sa_init(const conf_t *conf);
 void sa_fini(void);
 

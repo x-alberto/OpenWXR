@@ -21,6 +21,7 @@
 
 #include <XPLMGraphics.h>
 #include <XPLMDisplay.h>
+#include <XPLMUtilities.h>
 
 #include <acfutils/assert.h>
 #include <acfutils/crc64.h>
@@ -51,6 +52,8 @@
 #define	EFIS_LON_FWD	134
 #define	EFIS_HEIGHT	(EFIS_LON_FWD + EFIS_LON_AFT)
 #define	WX_SMOOTH_RNG	300		/* meters */
+
+bool_t get_mode();
 
 static void atmo_xp11_set_range(double range);
 static void atmo_xp11_probe(scan_line_t *sl);
@@ -385,6 +388,7 @@ update_efis(void)
 	 * instrument_brightness_ratio[0], so make sure it's full intensity
 	 * all the time so we can read the map.
 	 */
+    dr_seti(&drs.EFIS.shows_wx, get_mode());
 	if (dr_getf(&drs.EFIS.instr_brt) != 1.0)
 		dr_setf(&drs.EFIS.instr_brt, 1.0);
 	if (dr_geti(&drs.EFIS.mode) != EFIS_MODE_NORM)
@@ -393,8 +397,8 @@ update_efis(void)
 		dr_seti(&drs.EFIS.submode, EFIS_SUBMODE_GOOD_MAP);
 	if (dr_geti(&drs.EFIS.range) != (int)xp11_atmo.range_i)
 		dr_seti(&drs.EFIS.range, xp11_atmo.range_i);
-	if (dr_geti(&drs.EFIS.shows_wx) != 1)
-		dr_seti(&drs.EFIS.shows_wx, 1);
+	//if (dr_geti(&drs.EFIS.shows_wx) != 1)
+		//dr_seti(&drs.EFIS.shows_wx, 1);
 	if (dr_getf(&drs.EFIS.wx_alpha) != 1.0)
 		dr_seti(&drs.EFIS.wx_alpha, 1);
 	if (dr_geti(&drs.EFIS.shows_tcas) != 0)
@@ -612,14 +616,14 @@ static int
 update_cb(XPLMDrawingPhase phase, int before, void *refcon)
 {
 	uint64_t now;
+
 	UNUSED(phase);
 	UNUSED(before);
 	UNUSED(refcon);
-
 	/*
 	 * Careful, don't read the FBO from the other phases, you'll get junk.
 	 */
-	if (dr_geti(&drs.render_type) != XPLANE_RENDER_GAUGES_3D_LIT)
+	if (dr_geti(&drs.render_type) != XPLANE_RENDER_GAUGES_3D_LIT) //XPLANE_RENDER_GAUGES_3D_LIT
 		return (1);
 
 #if	!APL
