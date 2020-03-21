@@ -495,7 +495,6 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	char buf[16];
 	double dashes[] = { 5, 5 };
 	char mode_name[16];
-	float gain = 0.0;
 
 	cairo_set_source_rgb(cr, CYAN_RGB(scr));
 	cairo_set_line_width(cr, 1);

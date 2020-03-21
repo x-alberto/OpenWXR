@@ -953,6 +953,7 @@ wxr_draw_square(wxr_t *wxr, vect2_t pos, vect2_t size)
 		wxr->draw_vert = wxr->vert_mode;
 	}
 
+    glUniform1f(wxr->wxr_prog_loc.brt, wxr->brt);
 	glutils_draw_quads(&wxr->wxr_scr_quads, wxr->wxr_prog);
 
 	glUseProgram(0);
