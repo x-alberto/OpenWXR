@@ -522,9 +522,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	    LINE_HEIGHT, TEXT_ALIGN_LEFT);
 	cairo_show_text(cr, mode_name);
 
-		DELAYED_DR_OP(&sys.gain_dr,
-	    gain = dr_getf(&sys.gain_dr.dr));
-	snprintf(buf, sizeof (buf), "GAIN %2.0f", gain*10 ); //snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
+    snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
 	align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET,
 	    TEXT_ALIGN_RIGHT);
 	cairo_show_text(cr, buf);
