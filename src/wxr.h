@@ -33,6 +33,7 @@ wxr_t *wxr_init(const wxr_conf_t *conf, const atmo_t *atmo);
 void wxr_fini(wxr_t *wxr);
 
 void wxr_set_acf_pos(wxr_t *wxr, geo_pos3_t pos, vect3_t orient);
+void wxr_get_acf_pos(wxr_t *wxr, geo_pos3_t *pos, vect3_t *orient);
 void wxr_draw(wxr_t *wxr, vect2_t pos, vect2_t size);
 
 void wxr_set_scale(wxr_t *wxr, unsigned range_idx);
@@ -48,7 +49,7 @@ void wxr_set_gain(wxr_t *wxr, double gain);
 double wxr_get_gain(const wxr_t *wxr);
 
 void wxr_set_stab(wxr_t *wxr, double pitch, double roll);
-void wxr_get_stab(const wxr_t *wxr, bool_t *pitch, bool_t *roll);
+void wxr_get_stab(const wxr_t *wxr, double *pitch, double *roll);
 
 void wxr_set_beam_shadow(wxr_t *wxr, bool_t flag);
 bool_t wxr_get_beam_shadow(const wxr_t *wxr);

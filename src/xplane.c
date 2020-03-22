@@ -58,6 +58,7 @@ static openwxr_intf_t openwxr_intf = {
 	.init = wxr_init,
 	.fini = wxr_fini,
 	.set_acf_pos = wxr_set_acf_pos,
+	.get_acf_pos = wxr_get_acf_pos,
 	.set_scale = wxr_set_scale,
 	.get_scale = wxr_get_scale,
 	.set_azimuth_limits = wxr_set_azimuth_limits,

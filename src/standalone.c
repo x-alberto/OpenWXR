@@ -57,7 +57,7 @@ static bool_t inited = B_FALSE;
 typedef enum {
 	RDR4B,
 	RDR2000,
-	RDR2001
+	RDR2100
 } ui_style_t;
 
 typedef enum {
@@ -404,10 +404,11 @@ floop_cb(float d_t, float elapsed, int counter, void *refcon)
 			mt_cairo_render_set_fps(scr->mtcr, 20);
 
 		DELAYED_DR_OP(&scr->brt_dr, brt = dr_getf(&scr->brt_dr.dr));
-		if (brt > scr->brt)
-			FILTER_IN(scr->brt, brt, d_t, 1);
-		else
-			FILTER_IN(scr->brt, brt, d_t, 0.2);
+		//if (brt > scr->brt)
+			//FILTER_IN(scr->brt, brt, d_t, 1);
+		//else
+			//FILTER_IN(scr->brt, brt, d_t, 0.2);
+			scr->brt = brt;
 	}
 
 	return (-1);
@@ -557,15 +558,11 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         dashes[1] = 7;
         cairo_set_dash(cr, dashes, 2, 0);
         cairo_set_line_width(cr, 2);
-//        for (int angle = -50; angle <= 50; angle += 50) {
-//            cairo_save(cr);
-//            cairo_rotate(cr, DEG2RAD(angle));
-            cairo_move_to(cr, 0, 0);
-            cairo_rel_line_to(cr, 0, -WXR_RES_Y);
-            cairo_stroke(cr);
-//            cairo_restore(cr);
-//        }
+        cairo_move_to(cr, 0, 0);
+        cairo_rel_line_to(cr, 0, -WXR_RES_Y);
+        cairo_stroke(cr);
         cairo_set_dash(cr, NULL, 0, 0);
+
         dashes[0] = 2;
         dashes[1] = 10;
         cairo_set_dash(cr, dashes, 2, 0);
@@ -583,11 +580,6 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
-
-         snprintf(buf, sizeof (buf), "STAB %s", (1 == 0) ?"ON" :"OFF" );// (1 == 0) ?("ON") :("OFF")
-        align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2,
-            TEXT_ALIGN_LEFT);
-        cairo_show_text(cr, buf);
 
         snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
         align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 +
@@ -618,6 +610,8 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
         if (wxr != NULL) {
             double tilt = intf->get_ant_pitch(wxr);
+            vect3_t pos;
+            vect2_t lim;
 
             if (tilt >= 0.05)
                 snprintf(buf, sizeof (buf), "UP %.1f\u00B0", tilt);
@@ -627,6 +621,23 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 snprintf(buf, sizeof (buf), "0.0\u00B0");
             align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2, TEXT_ALIGN_RIGHT);
             cairo_show_text(cr, buf);
+
+
+            intf->get_acf_pos(wxr, &NULL_GEO_POS3, &pos);
+            intf->get_stab(wxr, &lim.x, &lim.y);
+
+            if(lim.x == 0 || lim.x == 0){
+             snprintf(buf, sizeof (buf), "STAB OFF");// (1 == 0) ?("ON") :("OFF")
+            align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2,
+                TEXT_ALIGN_LEFT);
+            cairo_show_text(cr, buf);
+            }
+            else if(ABS(pos.x) > lim.x || ABS(pos.z) > lim.y){
+            snprintf(buf, sizeof (buf), "STAB LMT");
+            align_text(cr, buf, WXR_RES_X / 2, -20,
+                TEXT_ALIGN_RIGHT);
+            cairo_show_text(cr, buf);
+            }
         }
 
         break;

@@ -41,6 +41,7 @@ typedef struct {
 	void (*fini)(wxr_t *wxr);
 
 	void (*set_acf_pos)(wxr_t *wxr, geo_pos3_t pos, vect3_t orient);
+	void (*get_acf_pos)(wxr_t *wxr, geo_pos3_t *pos, vect3_t *orient);
 	void (*set_scale)(wxr_t *wxr, unsigned range_idx);
 	unsigned (*get_scale)(const wxr_t *wxr);
 	void (*set_azimuth_limits)(wxr_t *wxr, double left, double right);
@@ -50,7 +51,7 @@ typedef struct {
 	void (*set_gain)(wxr_t *wxr, double gain);
 	double (*get_gain)(const wxr_t *wxr);
 	void (*set_stab)(wxr_t *wxr, double angle, double roll);
-	void (*get_stab)(const wxr_t *wxr, bool_t *pitch, bool_t *roll);
+	void (*get_stab)(const wxr_t *wxr, double *pitch, double *roll);
 	void (*set_beam_shadow)(wxr_t *wxr, bool_t flag);
 	bool_t (*get_beam_shadow)(const wxr_t *wxr);
 	void (*set_standby)(wxr_t *wxr, bool_t flag);

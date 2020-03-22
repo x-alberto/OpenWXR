@@ -576,6 +576,14 @@ wxr_set_acf_pos(wxr_t *wxr, geo_pos3_t pos, vect3_t orient)
 	mutex_exit(&wxr->lock);
 }
 
+void wxr_get_acf_pos(wxr_t *wxr, geo_pos3_t *pos, vect3_t *orient)
+{
+    ASSERT(!IS_NULL_GEO_POS(wxr->acf_pos));
+	ASSERT(!IS_NULL_VECT(wxr->acf_orient));
+    *pos = wxr->acf_pos;
+    *orient = wxr->acf_orient;
+}
+
 void
 wxr_set_scale(wxr_t *wxr, unsigned range_idx)
 {
@@ -681,7 +689,7 @@ wxr_set_stab(wxr_t *wxr, double pitch, double roll)
 }
 
 void
-wxr_get_stab(const wxr_t *wxr, bool_t *pitch, bool_t *roll)
+wxr_get_stab(const wxr_t *wxr, double *pitch, double *roll)
 {
 	*pitch = wxr->pitch_stab;
 	*roll = wxr->roll_stab;
