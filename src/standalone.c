@@ -435,14 +435,10 @@ draw_cb(XPLMDrawingPhase phase, int before, void *refcon)
 	for (unsigned i = 0; wxr != NULL && i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
 		double center_x = scr->x + scr->w / 2;
-
 		double sz = scr->h * scr->underscan;
-        if(scr->sys->modes->disp_type == WXR_DISP_ARC)
-            intf->draw(wxr, VECT2(center_x - sz, scr->y),
-                VECT2(2 * sz, sz));
-        else
-            intf->draw(wxr, VECT2(center_x - sz, scr->y),
-                VECT2(2 * sz, scr->h));
+
+		intf->draw(wxr, VECT2(center_x - sz, scr->y),
+		    VECT2(2 * sz, sz));
 		mt_cairo_render_draw(scr->mtcr, VECT2(scr->x, scr->y),
 		    VECT2(scr->w, scr->h));
 	}
@@ -500,47 +496,24 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	double dashes[] = { 5, 5 };
 	char mode_name[16];
 
-    if(scr->sys->modes->disp_type == WXR_DISP_ARC){
-        cairo_set_source_rgb(cr, CYAN_RGB(scr));
-        cairo_set_line_width(cr, 1);
-        for (int angle = -90; angle <= 90; angle += 30) {
-            cairo_save(cr);
-            cairo_rotate(cr, DEG2RAD(angle));
-            cairo_move_to(cr, 0, 0);
-            cairo_rel_line_to(cr, 0, -WXR_RES_Y);
-            cairo_stroke(cr);
-            cairo_restore(cr);
-        }
+	cairo_set_source_rgb(cr, CYAN_RGB(scr));
+	cairo_set_line_width(cr, 1);
+	for (int angle = -90; angle <= 90; angle += 30) {
+		cairo_save(cr);
+		cairo_rotate(cr, DEG2RAD(angle));
+		cairo_move_to(cr, 0, 0);
+		cairo_rel_line_to(cr, 0, -WXR_RES_Y);
+		cairo_stroke(cr);
+		cairo_restore(cr);
+	}
 
-        cairo_set_dash(cr, dashes, 2, 0);
-        for (int i = 0; i < 4; i++) {
-            cairo_arc(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(180),
-                DEG2RAD(360));
-            cairo_stroke(cr);
-        }
-        cairo_set_dash(cr, NULL, 0, 0);
-    }
-    else{
-        cairo_set_source_rgb(cr, CYAN_RGB(scr));
-        cairo_set_line_width(cr, 1);
-        for (int pos = -WXR_RES_X/2; pos <= WXR_RES_X/2; pos += WXR_RES_X/4) {
-            cairo_save(cr);
-            cairo_move_to(cr, pos/scr->underscan, 0);
-            cairo_rel_line_to(cr, 0, -WXR_RES_Y/scr->underscan);
-            cairo_stroke(cr);
-            cairo_restore(cr);
-        }
-        cairo_set_dash(cr, dashes, 2, 0);
-        for (int pos = -WXR_RES_Y; pos <= 0; pos += WXR_RES_Y/4) {
-            cairo_save(cr);
-            cairo_move_to(cr, -WXR_RES_X/2/scr->underscan, pos/scr->underscan);
-            cairo_rel_line_to(cr, WXR_RES_X/scr->underscan, 0);
-            cairo_stroke(cr);
-            cairo_restore(cr);
-        }
-        cairo_set_dash(cr, NULL, 0, 0);
-    }
-
+	cairo_set_dash(cr, dashes, 2, 0);
+	for (int i = 0; i < 4; i++) {
+		cairo_arc(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(180),
+		    DEG2RAD(360));
+		cairo_stroke(cr);
+	}
+	cairo_set_dash(cr, NULL, 0, 0);
 
 	cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
 	cairo_set_font_size(cr, FONT_SZ);
@@ -727,8 +700,8 @@ parse_conf_file(const conf_t *conf)
             aux->is_wxr = B_TRUE;
 	}
 
-    conf_get_i(conf, "Left_corner_value", (int *)&sys.left_value);
-    conf_get_i(conf, "Right_corner_value", (int *)&sys.right_value);
+    conf_get_i(conf, "Right_corner_value", &sys.left_value);
+    conf_get_i(conf, "Right_corner_value", &sys.right_value);
     sys.left_value = clampi(sys.left_value, 0, 2);
     sys.right_value = clampi(sys.right_value, 0, 2);
 
