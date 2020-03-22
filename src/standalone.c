@@ -634,9 +634,6 @@ parse_conf_file(const conf_t *conf)
 		wxr_conf_t *mode = &sys.modes[i];
 		mode_aux_info_t *aux = &sys.aux[i];
 
-		conf_get_i(conf, "disp_type", (int *)&mode->disp_type);
-		mode->disp_type = clampi(mode->disp_type, 0, 1);
-
 		conf_get_i(conf, "res/x", (int *)&mode->res_x);
 		conf_get_i(conf, "res/y", (int *)&mode->res_y);
 		mode->res_x = clampi(mode->res_x, 64, 512);
