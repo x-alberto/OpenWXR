@@ -55,12 +55,6 @@
 static bool_t inited = B_FALSE;
 
 typedef enum {
-	RANGE,
-	GAIN,
-	MRK,
-} dis_val_t;
-
-typedef enum {
 	TEXT_ALIGN_LEFT,
 	TEXT_ALIGN_CENTER,
 	TEXT_ALIGN_RIGHT
@@ -147,9 +141,6 @@ struct wxr_sys_s {
 	double			gain_auto_pos;
 	double			tilt;
 	double			tilt_rate;
-
-	dis_val_t left_value;
-	dis_val_t right_value;
 
 	bool_t			shared_egpws;
 	const egpws_intf_t	*terr;
@@ -518,25 +509,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
 	cairo_set_font_size(cr, FONT_SZ);
 
-    switch(sys.left_value)
-    {
-    case RANGE:
-        snprintf(buf, sizeof (buf), "RNG %3.0f", MET2NM(sys.range));
-        break;
-
-    case GAIN:
-        DELAYED_DR_OP(&sys.gain_dr,
-            snprintf(buf, sizeof (buf), "GAIN %2.0f", dr_getf(&sys.gain_dr.dr)*10 ));
-        break;
-
-    case MRK:
-        snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
-        break;
-
-    default:
-        snprintf(buf, sizeof (buf), "RNG %3.0f", MET2NM(sys.range));
-    }
-	//snprintf(buf, sizeof (buf), "RNG %3.0f", MET2NM(sys.range));
+	snprintf(buf, sizeof (buf), "RNG %3.0f", MET2NM(sys.range));
 	align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET,
 	    TEXT_ALIGN_LEFT);
 	cairo_show_text(cr, buf);
@@ -549,28 +522,9 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	    LINE_HEIGHT, TEXT_ALIGN_LEFT);
 	cairo_show_text(cr, mode_name);
 
-    switch(sys.right_value)
-    {
-    case RANGE:
-        snprintf(buf, sizeof (buf), "RNG %3.0f", MET2NM(sys.range));
-        break;
-
-    case GAIN:
-        DELAYED_DR_OP(&sys.gain_dr,
-            snprintf(buf, sizeof (buf), "GAIN %2.0f", dr_getf(&sys.gain_dr.dr)*10 ));
-        break;
-
-    case MRK:
-        snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
-        break;
-
-    default:
-        snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
-    }
-//    DELAYED_DR_OP(&sys.gain_dr,
-//	    gain = dr_getf(&sys.gain_dr.dr));
-//	snprintf(buf, sizeof (buf), "GAIN %2.0f", gain*10 );
-	//snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
+		DELAYED_DR_OP(&sys.gain_dr,
+	    gain = dr_getf(&sys.gain_dr.dr));
+	snprintf(buf, sizeof (buf), "GAIN %2.0f", gain*10 ); //snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
 	align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET,
 	    TEXT_ALIGN_RIGHT);
 	cairo_show_text(cr, buf);
@@ -696,11 +650,6 @@ parse_conf_file(const conf_t *conf)
         if(!conf_get_b_v(conf, "mode/%d/is_wxr", &aux->is_wxr, i))
             aux->is_wxr = B_TRUE;
 	}
-
-    conf_get_i(conf, "Right_corner_value", &sys.left_value);
-    conf_get_i(conf, "Right_corner_value", &sys.right_value);
-    sys.left_value = clampi(sys.left_value, 0, 2);
-    sys.right_value = clampi(sys.right_value, 0, 2);
 
 	if (conf_get_str(conf, "power_dr", &str))
 		strlcpy(sys.power_dr.name, str, sizeof (sys.power_dr.name));
