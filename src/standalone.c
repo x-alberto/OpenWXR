@@ -138,6 +138,7 @@ struct wxr_sys_s {
 	delayed_dr_t		range_dr;
 	delayed_dr_t		gain_dr;
 	delayed_dr_t		trk_dr;
+	delayed_dr_t        stab_dr;
 
 	delayed_ctl_t		power_sw_ctl;
 	delayed_ctl_t		mode_ctl;
@@ -150,6 +151,7 @@ struct wxr_sys_s {
 	double			tilt_rate;
 	int         trk;
     bool_t	    	trk_delay;
+    //unsigned    stab_mode;
 
 	ui_style_t ui_style;
 
@@ -278,7 +280,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	double tilt = 0, gain_ctl = 0.5;
 	double gain = 0;
 	double trk = 0;
-
+    unsigned stab = 1;
 	bool_t power_on = B_TRUE, power_sw_on = B_TRUE, stby = B_FALSE;
 	geo_pos3_t pos =
 	    GEO_POS3(dr_getf(&drs.lat), dr_getf(&drs.lon), dr_getf(&drs.elev));
@@ -356,6 +358,14 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
             XPLMSetFlightLoopCallbackInterval(trk_delay_cb, 15, 1, NULL);
         }
         sys.trk = clamp(trk, -90, 90);
+
+    DELAYED_DR_OP(&sys.stab_dr,
+            stab = dr_geti(&sys.stab_dr.dr));
+            if(stab)
+            {
+                intf->set_stab(wxr, sys.aux[sys.cur_mode].stab_lim.x, sys.aux[sys.cur_mode].stab_lim.x);
+            }
+            else intf->set_stab(wxr, 0, 0);
 }
 
 
@@ -831,6 +841,8 @@ parse_conf_file(const conf_t *conf)
 		strlcpy(sys.gain_dr.name, str, sizeof (sys.gain_dr.name));
     if (conf_get_str(conf, "trk_dr", &str))
 		strlcpy(sys.trk_dr.name, str, sizeof (sys.trk_dr.name));
+    if (conf_get_str(conf, "stab_dr", &str))
+		strlcpy(sys.stab_dr.name, str, sizeof (sys.stab_dr.name));
 	conf_get_d(conf, "gain_auto_pos", &sys.gain_auto_pos);
 	conf_get_d(conf, "tilt_rate", &sys.tilt_rate);
 	sys.tilt_rate = MAX(sys.tilt_rate, 1);
