@@ -51,13 +51,13 @@
 
 #define	COLOR(c, scr)	((c) * ((pow(4.0, (scr)->brt / 0.75)) / 4.0))
 #define	CYAN_RGB(scr)	COLOR(0, (scr)), COLOR(0.66, (scr)), COLOR(0.66, (scr))
+#define	YELLOW_RGB(scr)	COLOR(1, (scr)), COLOR(0.8, (scr)), COLOR(0, (scr))
 
 static bool_t inited = B_FALSE;
 
 typedef enum {
 	RDR4B,
-	RDR2000,
-	RDR2100
+	RDR2000
 } ui_style_t;
 
 typedef enum {
@@ -137,6 +137,7 @@ struct wxr_sys_s {
 	delayed_dr_t		tilt_dr;
 	delayed_dr_t		range_dr;
 	delayed_dr_t		gain_dr;
+	delayed_dr_t		trk_dr;
 
 	delayed_ctl_t		power_sw_ctl;
 	delayed_ctl_t		mode_ctl;
@@ -147,6 +148,8 @@ struct wxr_sys_s {
 	double			gain_auto_pos;
 	double			tilt;
 	double			tilt_rate;
+	int         trk;
+    bool_t	    	trk_delay;
 
 	ui_style_t ui_style;
 
@@ -202,6 +205,17 @@ static void draw_debug_win(XPLMWindowID win, void *refcon);
 			} \
 		} \
 	} while (0)
+
+static float
+trk_delay_cb(float d_t, float elapsed, int counter, void *refcon)
+{
+	UNUSED(elapsed);
+	UNUSED(counter);
+	UNUSED(refcon);
+	UNUSED(d_t);
+	sys.trk_delay = B_FALSE;
+	return (0);
+}
 
 static void
 delayed_ctl_set(delayed_ctl_t *ctl, double new_value)
@@ -263,6 +277,10 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	unsigned range = 0;
 	double tilt = 0, gain_ctl = 0.5;
 	double gain = 0;
+	double trk = 0;
+	static double time = 0;
+	double now = dr_getf(&drs.sim_time);
+
 	bool_t power_on = B_TRUE, power_sw_on = B_TRUE, stby = B_FALSE;
 	geo_pos3_t pos =
 	    GEO_POS3(dr_getf(&drs.lat), dr_getf(&drs.lon), dr_getf(&drs.elev));
@@ -277,7 +295,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	power_sw_on = delayed_ctl_geti(&sys.power_sw_ctl);
 
 	if (power_on && power_sw_on) {
-		double now = dr_getf(&drs.sim_time);
+		//double now = dr_getf(&drs.sim_time);
 		if (sys.power_on_time == 0)
 			sys.power_on_time = now;
 		stby = (now - sys.power_on_time < sys.power_on_delay);
@@ -325,7 +343,16 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	else
 		gain = wavg(MIN_GAIN, MAX_GAIN, clamp(gain_ctl, 0, 1));
 	intf->set_gain(wxr, gain);
+
+    DELAYED_DR_OP(&sys.trk_dr,
+            trk = dr_geti(&sys.trk_dr.dr));
+        if(sys.trk != trk){
+            sys.trk_delay = B_TRUE;
+            XPLMSetFlightLoopCallbackInterval(trk_delay_cb, 15, 1, NULL);
+        }
+        sys.trk = clamp(trk, -90, 90);
 }
+
 
 static float
 floop_cb(float d_t, float elapsed, int counter, void *refcon)
@@ -408,7 +435,9 @@ floop_cb(float d_t, float elapsed, int counter, void *refcon)
 			//FILTER_IN(scr->brt, brt, d_t, 1);
 		//else
 			//FILTER_IN(scr->brt, brt, d_t, 0.2);
+        //does not work properly.
 			scr->brt = brt;
+
 	}
 
 	return (-1);
@@ -553,11 +582,34 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         }
         break;
     case RDR2000:
+        cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
+        cairo_set_font_size(cr, FONT_SZ);
+
+        if(sys.trk_delay == B_TRUE){
+        cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+        dashes[0] = 3;
+        dashes[1] = 3;
+        cairo_set_line_width(cr, 2);
+        cairo_save(cr);
+        cairo_move_to(cr, 0, 0);
+        cairo_rotate(cr, DEG2RAD(sys.trk));
+        cairo_rel_line_to(cr, 0, -WXR_RES_Y);
+        cairo_stroke(cr);
+        cairo_restore(cr);
+
+            snprintf(buf, sizeof (buf), "%2u\u00B0", ABS(sys.trk));
+            align_text(cr, buf, -WXR_RES_X / 2 + FONT_SZ*2, -WXR_RES_Y - TOP_OFFSET*2 +
+            LINE_HEIGHT,
+                TEXT_ALIGN_RIGHT);
+            cairo_show_text(cr, buf);
+
+        }
+
         cairo_set_source_rgb(cr, CYAN_RGB(scr));
         dashes[0] = 2;
         dashes[1] = 7;
         cairo_set_dash(cr, dashes, 2, 0);
-        cairo_set_line_width(cr, 2);
+        //cairo_set_line_width(cr, 2);
         cairo_move_to(cr, 0, 0);
         cairo_rel_line_to(cr, 0, -WXR_RES_Y);
         cairo_stroke(cr);
@@ -577,9 +629,6 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
             cairo_stroke(cr);
         }
         cairo_set_dash(cr, NULL, 0, 0);
-
-        cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
-        cairo_set_font_size(cr, FONT_SZ);
 
         snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
         align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 +
@@ -768,6 +817,8 @@ parse_conf_file(const conf_t *conf)
 		strlcpy(sys.mode_dr.name, str, sizeof (sys.mode_dr.name));
 	if (conf_get_str(conf, "gain_dr", &str))
 		strlcpy(sys.gain_dr.name, str, sizeof (sys.gain_dr.name));
+    if (conf_get_str(conf, "trk_dr", &str))
+		strlcpy(sys.trk_dr.name, str, sizeof (sys.trk_dr.name));
 	conf_get_d(conf, "gain_auto_pos", &sys.gain_auto_pos);
 	conf_get_d(conf, "tilt_rate", &sys.tilt_rate);
 	sys.tilt_rate = MAX(sys.tilt_rate, 1);
@@ -877,6 +928,7 @@ sa_init(const conf_t *conf)
 	fdr_find(&drs.roll, "sim/flightmodel/position/phi");
 
 	XPLMRegisterFlightLoopCallback(floop_cb, -1, NULL);
+	XPLMRegisterFlightLoopCallback(trk_delay_cb, 0, NULL);
 	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
 	return (B_TRUE);
