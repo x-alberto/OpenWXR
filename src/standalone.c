@@ -278,8 +278,6 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	double tilt = 0, gain_ctl = 0.5;
 	double gain = 0;
 	double trk = 0;
-	static double time = 0;
-	double now = dr_getf(&drs.sim_time);
 
 	bool_t power_on = B_TRUE, power_sw_on = B_TRUE, stby = B_FALSE;
 	geo_pos3_t pos =
@@ -295,7 +293,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	power_sw_on = delayed_ctl_geti(&sys.power_sw_ctl);
 
 	if (power_on && power_sw_on) {
-		//double now = dr_getf(&drs.sim_time);
+		double now = dr_getf(&drs.sim_time);
 		if (sys.power_on_time == 0)
 			sys.power_on_time = now;
 		stby = (now - sys.power_on_time < sys.power_on_delay);
@@ -303,6 +301,13 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 		stby = B_TRUE;
 		sys.power_on_time = 0;
 	}
+
+	if(mode->is_stby == B_TRUE && intf->get_standby(wxr) == B_FALSE)
+    {
+        intf->clear_screen(wxr);
+        stby = B_TRUE;
+    }
+
 
 	intf->set_standby(wxr, stby);
 	intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.y);
@@ -632,22 +637,22 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
         snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
         align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 +
-            LINE_HEIGHT, TEXT_ALIGN_RIGHT);
+            27, TEXT_ALIGN_RIGHT);
         cairo_show_text(cr, buf);
 
-        snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range/2) );
-        align_text(cr, buf, WXR_RES_X / 2.1, -((WXR_RES_Y)/ 4) * 2 + 20
-            , TEXT_ALIGN_RIGHT);
+        snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - sys.range/4) );
+        align_text(cr, buf, WXR_RES_X / 2.45, -((WXR_RES_Y)/ 4) * 2 + 25
+            , TEXT_ALIGN_LEFT);
         cairo_show_text(cr, buf);
 
-        snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range/4) );
-        align_text(cr, buf, WXR_RES_X / 3.1, -(WXR_RES_Y/ 4)
-            , TEXT_ALIGN_RIGHT);
+        snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range - (sys.range/4)*2 ) );
+        align_text(cr, buf, WXR_RES_X / 3.2, -(WXR_RES_Y/ 4)
+            , TEXT_ALIGN_LEFT);
         cairo_show_text(cr, buf);
 
-        snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range/8) );
-        align_text(cr, buf, WXR_RES_X / 5.1, -(WXR_RES_Y/ 4) / 2
-            , TEXT_ALIGN_RIGHT);
+        snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - (sys.range/4)*3 ) );
+        align_text(cr, buf, WXR_RES_X / 6.8, -(WXR_RES_Y/ 4) / 2 + 10
+            , TEXT_ALIGN_LEFT);
         cairo_show_text(cr, buf);
 
         mutex_enter(&sys.mode_lock);
@@ -668,7 +673,12 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 snprintf(buf, sizeof (buf), "DN %.1f\u00B0", ABS(tilt));
             else
                 snprintf(buf, sizeof (buf), "0.0\u00B0");
-            align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2, TEXT_ALIGN_RIGHT);
+            align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 , TEXT_ALIGN_RIGHT);
+            cairo_show_text(cr, buf);
+
+            snprintf(buf, sizeof (buf), "%1.1f", intf->get_gain(wxr));
+            align_text(cr, buf, -WXR_RES_X / 2, -20,
+                TEXT_ALIGN_LEFT);
             cairo_show_text(cr, buf);
 
 
@@ -800,6 +810,8 @@ parse_conf_file(const conf_t *conf)
 
         if(!conf_get_b_v(conf, "mode/%d/is_wxr", &aux->is_wxr, i))
             aux->is_wxr = B_TRUE;
+        if(!conf_get_b_v(conf, "mode/%d/is_stby", &mode->is_stby, i))
+            mode->is_stby = B_FALSE;
 	}
 
 	if (conf_get_str(conf, "power_dr", &str))
@@ -964,6 +976,7 @@ sa_fini(void)
 	}
 
 	XPLMUnregisterFlightLoopCallback(floop_cb, NULL);
+	XPLMUnregisterFlightLoopCallback(trk_delay_cb, NULL);
 	XPLMUnregisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
 	mutex_destroy(&sys.mode_lock);
