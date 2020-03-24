@@ -219,6 +219,7 @@ trk_delay_cb(float d_t, float elapsed, int counter, void *refcon)
 	return (0);
 }
 
+
 static void
 delayed_ctl_set(delayed_ctl_t *ctl, double new_value)
 {
@@ -294,7 +295,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	delayed_ctl_set(&sys.power_sw_ctl, power_sw_on);
 	power_sw_on = delayed_ctl_geti(&sys.power_sw_ctl);
 
-	if (power_on && power_sw_on) {
+	if (power_on && power_sw_on && mode->is_stby == B_FALSE) {
 		double now = dr_getf(&drs.sim_time);
 		if (sys.power_on_time == 0)
 			sys.power_on_time = now;
@@ -303,13 +304,6 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 		stby = B_TRUE;
 		sys.power_on_time = 0;
 	}
-
-	if(mode->is_stby == B_TRUE && intf->get_standby(wxr) == B_FALSE)
-    {
-        intf->clear_screen(wxr);
-        stby = B_TRUE;
-    }
-
 
 	intf->set_standby(wxr, stby);
 	intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.y);
