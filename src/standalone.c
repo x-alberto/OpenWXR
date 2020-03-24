@@ -282,6 +282,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	double gain = 0;
 	double trk = 0;
     unsigned stab = 1;
+
 	bool_t power_on = B_TRUE, power_sw_on = B_TRUE, stby = B_FALSE;
 	geo_pos3_t pos =
 	    GEO_POS3(dr_getf(&drs.lat), dr_getf(&drs.lon), dr_getf(&drs.elev));
@@ -357,7 +358,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
             stab = dr_geti(&sys.stab_dr.dr));
             if(stab)
             {
-                intf->set_stab(wxr, sys.aux[sys.cur_mode].stab_lim.x, sys.aux[sys.cur_mode].stab_lim.x);
+                intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.x);
             }
             else intf->set_stab(wxr, 0, 0);
 }
