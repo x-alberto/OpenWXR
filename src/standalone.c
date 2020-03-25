@@ -152,7 +152,7 @@ struct wxr_sys_s {
 
 	double          alert_rate;
 	int             trk;
-    bool_t	    	trk_delay_flag;
+    bool_t	    	trk_timer_flag;
     bool_t          alert_timer_flag;
     //unsigned    stab_mode;
 
@@ -212,13 +212,13 @@ static void draw_debug_win(XPLMWindowID win, void *refcon);
 	} while (0)
 
 static float
-trk_delay_cb(float d_t, float elapsed, int counter, void *refcon)
+trk_timer_cb(float d_t, float elapsed, int counter, void *refcon)
 {
 	UNUSED(elapsed);
 	UNUSED(counter);
 	UNUSED(refcon);
 	UNUSED(d_t);
-	sys.trk_delay_flag = B_FALSE;
+	sys.trk_timer_flag = B_FALSE;
 	return (0);
 }
 
@@ -376,8 +376,8 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
     DELAYED_DR_OP(&sys.trk_dr,
             trk = dr_geti(&sys.trk_dr.dr));
         if(sys.trk != trk){
-            sys.trk_delay_flag = B_TRUE;
-            XPLMSetFlightLoopCallbackInterval(trk_delay_cb, 15, 1, NULL);
+            sys.trk_timer_flag = B_TRUE;
+            XPLMSetFlightLoopCallbackInterval(trk_timer_cb, 15, 1, NULL);
         }
         sys.trk = clamp(trk, -90, 90);
 
@@ -626,7 +626,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
 
-        if(sys.trk_delay_flag == B_TRUE){
+        if(sys.trk_timer_flag == B_TRUE){
         cairo_set_source_rgb(cr, YELLOW_RGB(scr));
         dashes[0] = 3;
         dashes[1] = 3;
@@ -982,7 +982,7 @@ sa_init(const conf_t *conf)
 	fdr_find(&drs.roll, "sim/flightmodel/position/phi");
 
 	XPLMRegisterFlightLoopCallback(floop_cb, -1, NULL);
-	XPLMRegisterFlightLoopCallback(trk_delay_cb, 0, NULL);
+	XPLMRegisterFlightLoopCallback(trk_timer_cb, 0, NULL);
 	XPLMRegisterFlightLoopCallback(alert_timer_cb, 0, NULL);
 	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
@@ -1019,7 +1019,7 @@ sa_fini(void)
 	}
 
 	XPLMUnregisterFlightLoopCallback(floop_cb, NULL);
-	XPLMUnregisterFlightLoopCallback(trk_delay_cb, NULL);
+	XPLMUnregisterFlightLoopCallback(trk_timer_cb, NULL);
 	XPLMUnregisterFlightLoopCallback(alert_timer_cb, NULL);
 	XPLMUnregisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
