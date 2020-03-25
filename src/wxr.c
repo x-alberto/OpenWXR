@@ -76,12 +76,16 @@ struct wxr_s {
 		GLint		tex_size;
 		GLint		smear_mult;
 		GLint		brt;
+		GLint	    alert;
+		GLint		col_ori;
+		GLint		col_rep;
 	} wxr_prog_loc;
 	glutils_quads_t		wxr_scr_quads;
 	vect2_t			draw_pos;
 	vect2_t			draw_size;
 	bool_t			draw_vert;
 	double			brt;
+	bool_t w_alert;
 
 	mutex_t			lock;
 	/* protected by lock above */
@@ -895,6 +899,8 @@ static void
 wxr_draw_arc(wxr_t *wxr, vect2_t pos, vect2_t size)
 {
 	GLfloat pvm[16];
+    unsigned col = wxr->colors[0].rgba;
+    unsigned rep = wxr->colors[wxr->num_colors-1].rgba;
 
 	if (!VECT2_EQ(pos, wxr->draw_pos) || !VECT2_EQ(size, wxr->draw_size) ||
 	    wxr->draw_vert != wxr->vert_mode) {
@@ -915,6 +921,9 @@ wxr_draw_arc(wxr_t *wxr, vect2_t pos, vect2_t size)
 	glUniform1f(wxr->wxr_prog_loc.smear_mult,
 	    wxr->vert_mode ? wxr->conf->smear.y : wxr->conf->smear.x);
 	glUniform1f(wxr->wxr_prog_loc.brt, wxr->brt);
+	glUniform1i(wxr->wxr_prog_loc.alert, (int)wxr->w_alert);
+	glUniform4f(wxr->wxr_prog_loc.col_ori, ((col & 0x000000FF) >> 0)/255.0, ((col & 0x0000FF00) >> 8)/255.0, ((col & 0x00FF0000) >> 16)/255.0, ((col & 0xFF000000)>> 24)/255.0);
+	glUniform4f(wxr->wxr_prog_loc.col_rep, ((rep & 0x000000FF) >> 0)/255.0, ((rep & 0x0000FF00) >> 8)/255.0, ((rep & 0x00FF0000) >> 16)/255.0, ((rep & 0xFF000000)>> 24)/255.0);
 
 	glutils_draw_quads(&wxr->wxr_scr_quads, wxr->wxr_prog);
 
@@ -1017,6 +1026,20 @@ wxr_set_standby(wxr_t *wxr, bool_t flag)
 		worker_init(&wxr->wk, wxr_worker, wxr->worker_intval, wxr,
 		    "OpenWXR-worker");
 	}
+}
+
+void
+wxr_set_alert(wxr_t *wxr, bool_t flag)
+{
+	if (wxr->w_alert == flag)
+		return;
+	wxr->w_alert = flag;
+}
+
+bool_t
+wxr_get_alert(wxr_t *wxr)
+{
+	return	wxr->w_alert;
 }
 
 bool_t
@@ -1131,6 +1154,9 @@ wxr_reload_gl_progs(wxr_t *wxr)
 	wxr->wxr_prog_loc.smear_mult =
 	    glGetUniformLocation(wxr->wxr_prog, "smear_mult");
 	wxr->wxr_prog_loc.brt = glGetUniformLocation(wxr->wxr_prog, "brt");
+	wxr->wxr_prog_loc.alert = glGetUniformLocation(wxr->wxr_prog, "alert");
+    wxr->wxr_prog_loc.col_ori = glGetUniformLocation(wxr->wxr_prog, "col_ori");
+	wxr->wxr_prog_loc.col_rep = glGetUniformLocation(wxr->wxr_prog, "col_rep");
 
 	return (B_TRUE);
 }

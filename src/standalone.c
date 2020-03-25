@@ -149,8 +149,11 @@ struct wxr_sys_s {
 	double			gain_auto_pos;
 	double			tilt;
 	double			tilt_rate;
-	int         trk;
-    bool_t	    	trk_delay;
+
+	double          alert_rate;
+	int             trk;
+    bool_t	    	trk_delay_flag;
+    bool_t          alert_timer_flag;
     //unsigned    stab_mode;
 
 	ui_style_t ui_style;
@@ -215,8 +218,21 @@ trk_delay_cb(float d_t, float elapsed, int counter, void *refcon)
 	UNUSED(counter);
 	UNUSED(refcon);
 	UNUSED(d_t);
-	sys.trk_delay = B_FALSE;
+	sys.trk_delay_flag = B_FALSE;
 	return (0);
+}
+
+static float
+alert_timer_cb(float d_t, float elapsed, int counter, void *refcon)
+{
+	UNUSED(elapsed);
+	UNUSED(counter);
+	UNUSED(refcon);
+	UNUSED(d_t);
+	if(intf->get_alert(wxr) == B_TRUE) intf->set_alert(wxr, B_FALSE);
+	else intf->set_alert(wxr, B_TRUE);
+
+	return (sys.alert_rate);
 }
 
 
@@ -332,6 +348,17 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 			intf->clear_screen(wxr);
 	}
 
+	if(mode->is_alert == B_TRUE && sys.alert_timer_flag == B_FALSE)    {
+        XPLMSetFlightLoopCallbackInterval(alert_timer_cb, sys.alert_rate, 1, NULL);
+        sys.alert_timer_flag = B_TRUE;
+        intf->set_alert(wxr, B_TRUE);
+    }
+    else if(mode->is_alert == B_FALSE && sys.alert_timer_flag == B_TRUE){
+        XPLMSetFlightLoopCallbackInterval(alert_timer_cb, 0, 1, NULL);
+        sys.alert_timer_flag = B_FALSE;
+        intf->set_alert(wxr, B_FALSE);
+    }
+
 	DELAYED_DR_OP(&sys.tilt_dr, tilt = dr_getf(&sys.tilt_dr.dr));
 	delayed_ctl_set(&sys.tilt_ctl, tilt);
 	tilt = delayed_ctl_get(&sys.tilt_ctl);
@@ -349,7 +376,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
     DELAYED_DR_OP(&sys.trk_dr,
             trk = dr_geti(&sys.trk_dr.dr));
         if(sys.trk != trk){
-            sys.trk_delay = B_TRUE;
+            sys.trk_delay_flag = B_TRUE;
             XPLMSetFlightLoopCallbackInterval(trk_delay_cb, 15, 1, NULL);
         }
         sys.trk = clamp(trk, -90, 90);
@@ -360,7 +387,11 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
             {
                 intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.x);
             }
-            else intf->set_stab(wxr, 0, 0);
+            else
+            {
+               intf->set_stab(wxr, 0, 0);
+            }
+
 }
 
 
@@ -595,7 +626,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
 
-        if(sys.trk_delay == B_TRUE){
+        if(sys.trk_delay_flag == B_TRUE){
         cairo_set_source_rgb(cr, YELLOW_RGB(scr));
         dashes[0] = 3;
         dashes[1] = 3;
@@ -817,6 +848,8 @@ parse_conf_file(const conf_t *conf)
             aux->is_wxr = B_TRUE;
         if(!conf_get_b_v(conf, "mode/%d/is_stby", &mode->is_stby, i))
             mode->is_stby = B_FALSE;
+        if(!conf_get_b_v(conf, "mode/%d/is_alert", &mode->is_alert, i))
+            mode->is_alert = B_FALSE;
 	}
 
 	if (conf_get_str(conf, "power_dr", &str))
@@ -839,6 +872,8 @@ parse_conf_file(const conf_t *conf)
     if (conf_get_str(conf, "stab_dr", &str))
 		strlcpy(sys.stab_dr.name, str, sizeof (sys.stab_dr.name));
 	conf_get_d(conf, "gain_auto_pos", &sys.gain_auto_pos);
+	conf_get_d(conf, "alert_rate", &sys.alert_rate);
+	sys.alert_rate = MAX(sys.alert_rate, 1);
 	conf_get_d(conf, "tilt_rate", &sys.tilt_rate);
 	sys.tilt_rate = MAX(sys.tilt_rate, 1);
 
@@ -948,6 +983,7 @@ sa_init(const conf_t *conf)
 
 	XPLMRegisterFlightLoopCallback(floop_cb, -1, NULL);
 	XPLMRegisterFlightLoopCallback(trk_delay_cb, 0, NULL);
+	XPLMRegisterFlightLoopCallback(alert_timer_cb, 0, NULL);
 	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
 	return (B_TRUE);
@@ -984,6 +1020,7 @@ sa_fini(void)
 
 	XPLMUnregisterFlightLoopCallback(floop_cb, NULL);
 	XPLMUnregisterFlightLoopCallback(trk_delay_cb, NULL);
+	XPLMUnregisterFlightLoopCallback(alert_timer_cb, NULL);
 	XPLMUnregisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
 
 	mutex_destroy(&sys.mode_lock);

@@ -72,7 +72,7 @@ typedef struct {
 	 * pulse (once sent out).
 	 */
 	vect2_t		beam_shape;
-	
+
 	wxr_disp_t	disp_type;	/* The of radar display to draw. */
 	double		scan_time;	/* Secs for one full swing side2side */
 	double		scan_angle;	/* Degrees btwn full lateral deflect */
@@ -86,6 +86,8 @@ typedef struct {
 	 * in the vertical scanning mode.
 	 */
 	vect2_t		smear;
+	bool_t is_stby;
+	bool_t is_alert;
 } wxr_conf_t;
 
 #ifdef __cplusplus

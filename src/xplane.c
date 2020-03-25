@@ -80,7 +80,9 @@ static openwxr_intf_t openwxr_intf = {
 	.set_colors = wxr_set_colors,
 	.get_brightness = wxr_get_brightness,
 	.set_brightness = wxr_set_brightness,
-	.reload_gl_progs = wxr_reload_gl_progs
+	.reload_gl_progs = wxr_reload_gl_progs,
+	.set_alert = wxr_set_alert,
+	.get_alert = wxr_get_alert
 };
 
 static conf_t *

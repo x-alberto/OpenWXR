@@ -63,6 +63,8 @@ typedef struct {
 	void (*set_colors)(wxr_t *wxr, const wxr_color_t *colors, size_t num);
 	double (*get_brightness)(const wxr_t *wxr);
 	void (*set_brightness)(wxr_t *wxr, double brt);
+	void (*set_alert)(wxr_t *wxr, bool_t flag);
+	bool_t (*get_alert)(wxr_t *wxr);
 
 	/* Debugging support */
 	bool_t (*reload_gl_progs)(wxr_t *wxr);

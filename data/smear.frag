@@ -26,6 +26,11 @@ layout(location = 10) uniform sampler2D	tex;
 layout(location = 11) uniform float	smear_mult;
 layout(location = 12) uniform float	brt;
 
+layout(location = 13) uniform bool	alert;
+
+layout(location = 8) uniform vec4 col_ori;
+layout(location = 9) uniform vec4 col_rep;
+
 layout(location = 0) in vec2		tex_coord;
 
 layout(location = 0) out vec4		color_out;
@@ -40,8 +45,10 @@ brt_adjust(vec3 c)
 void
 main()
 {
+
 	vec4 pixel = texture(tex, tex_coord);
 	vec2 tex_size = textureSize(tex, 0);
+
 
 	if (pixel.r == pixel.g && pixel.r == pixel.b) {
 		color_out = pixel;
@@ -63,9 +70,14 @@ main()
 		 * component is smeared using smear_s and vice versa.
 		 * Gives us the jaggedy-edged look we want.
 		 */
+
 		color_out = texture(tex, vec2(tex_coord.s,
 		    clamp(tex_coord.t + smear_s, 0.0, 1.0)));
 	}
 
 	color_out = vec4(brt_adjust(color_out.rgb), color_out.a);
+    if(alert){
+        if( all( greaterThanEqual(color_out , vec4(col_ori)) ) )
+             color_out = vec4(col_rep);
+    }
 }
