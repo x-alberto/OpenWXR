@@ -493,8 +493,8 @@ draw_cb(XPLMDrawingPhase phase, int before, void *refcon)
 	UNUSED(before);
 	UNUSED(refcon);
 
-	if (dr_geti(&drs.panel_render_type) != PANEL_RENDER_TYPE_3D_LIT)
-		return (1);
+//	if (dr_geti(&drs.panel_render_type) != PANEL_RENDER_TYPE_3D_LIT)
+//		return (1);
 
 	/*
 	 * Even though we don't draw tiles, we need to let OpenGPWS when
@@ -984,7 +984,7 @@ sa_init(const conf_t *conf)
 	XPLMRegisterFlightLoopCallback(floop_cb, -1, NULL);
 	XPLMRegisterFlightLoopCallback(trk_timer_cb, 0, NULL);
 	XPLMRegisterFlightLoopCallback(alert_timer_cb, 0, NULL);
-	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);
+	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Panel, 0, NULL);//xplm_Phase_Gauges
 
 	return (B_TRUE);
 errout:
