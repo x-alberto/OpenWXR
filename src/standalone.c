@@ -460,11 +460,11 @@ floop_cb(float d_t, float elapsed, int counter, void *refcon)
 			double rate = (scr->power_on_rate /
 			    (1 + 50 * POW3(scr->scr_temp)));
 
-			FILTER_IN(scr->scr_temp, 1, d_t, 10);
-			FILTER_IN(scr->power, 1, d_t, rate);
+			FILTER_IN_LIN(scr->scr_temp, 1, d_t, 10);
+			FILTER_IN_LIN(scr->power, 1, d_t, rate);
 		} else {
-			FILTER_IN(scr->scr_temp, 0, d_t, 600);
-			FILTER_IN(scr->power, 0, d_t, scr->power_off_rate);
+			FILTER_IN_LIN(scr->scr_temp, 0, d_t, 600);
+			FILTER_IN_LIN(scr->power, 0, d_t, scr->power_off_rate);
 		}
 		if (scr->power < 0.01 || scr->power > 0.99)
 			mt_cairo_render_set_fps(scr->mtcr, scr->fps);
@@ -472,12 +472,10 @@ floop_cb(float d_t, float elapsed, int counter, void *refcon)
 			mt_cairo_render_set_fps(scr->mtcr, 20);
 
 		DELAYED_DR_OP(&scr->brt_dr, brt = dr_getf(&scr->brt_dr.dr));
-		//if (brt > scr->brt)
-			//FILTER_IN(scr->brt, brt, d_t, 1);
-		//else
-			//FILTER_IN(scr->brt, brt, d_t, 0.2);
-        //does not work properly.
-			scr->brt = brt;
+		if (brt > scr->brt)
+			FILTER_IN_LIN(scr->brt, brt, d_t, 1);
+		else
+			FILTER_IN_LIN(scr->brt, brt, d_t, 0.2);
 
 	}
 
