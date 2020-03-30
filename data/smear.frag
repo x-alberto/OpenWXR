@@ -74,10 +74,10 @@ main()
 		color_out = texture(tex, vec2(tex_coord.s,
 		    clamp(tex_coord.t + smear_s, 0.0, 1.0)));
 	}
-
-	color_out = vec4(brt_adjust(color_out.rgb), color_out.a);
     if(alert){
         if( all( greaterThanEqual(color_out , vec4(col_ori)) ) )
              color_out = vec4(col_rep);
     }
+	color_out = vec4(brt_adjust(color_out.rgb), color_out.a);
+
 }
