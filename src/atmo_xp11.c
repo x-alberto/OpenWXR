@@ -495,7 +495,8 @@ setup_opengl(void)
 	}
 
 	if (xp11_atmo.tmp_tex[0] == 0) {
-		glGenTextures(3, xp11_atmo.tmp_tex);
+            XPLMGenerateTextureNumbers(xp11_atmo.tmp_tex, 3);
+		//glGenTextures(3, xp11_atmo.tmp_tex);
 		for (int i = 0; i < 3; i++) {
 			XPLMBindTexture2d(xp11_atmo.tmp_tex[i], GL_TEXTURE_2D);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, EFIS_WIDTH,

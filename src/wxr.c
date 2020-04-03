@@ -822,8 +822,10 @@ wxr_bind_tex(wxr_t *wxr, bool_t shadow_tex)
 		/* initial texture upload, do a sync upload */
 		ASSERT(wxr->cur_tex == 0);
 
-		glGenTextures(2, wxr->tex);
-		glGenTextures(2, wxr->shadow_tex);
+		XPLMGenerateTextureNumbers(wxr->tex, 2);
+		XPLMGenerateTextureNumbers(wxr->shadow_tex, 2);
+//		glGenTextures(2, wxr->tex);
+//		glGenTextures(2, wxr->shadow_tex);
 
 		for (int i = 0; i < 2; i++) {
 			glBindTexture(GL_TEXTURE_2D, wxr->tex[i]);
