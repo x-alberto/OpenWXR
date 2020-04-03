@@ -32,6 +32,8 @@ extern "C" {
 wxr_t *wxr_init(const wxr_conf_t *conf, const atmo_t *atmo);
 void wxr_fini(wxr_t *wxr);
 
+void wxr_set_conf(wxr_t *wxr, const wxr_conf_t *conf);
+
 void wxr_set_acf_pos(wxr_t *wxr, geo_pos3_t pos, vect3_t orient);
 void wxr_get_acf_pos(wxr_t *wxr, geo_pos3_t *pos, vect3_t *orient);
 void wxr_draw(wxr_t *wxr, vect2_t pos, vect2_t size);

@@ -39,7 +39,7 @@ typedef struct {
 typedef struct {
 	wxr_t *(*init)(const wxr_conf_t *conf, const atmo_t *atmo);
 	void (*fini)(wxr_t *wxr);
-
+    void (*set_conf)(wxr_t *wxr, const wxr_conf_t *conf);
 	void (*set_acf_pos)(wxr_t *wxr, geo_pos3_t pos, vect3_t orient);
 	void (*get_acf_pos)(wxr_t *wxr, geo_pos3_t *pos, vect3_t *orient);
 	void (*set_scale)(wxr_t *wxr, unsigned range_idx);

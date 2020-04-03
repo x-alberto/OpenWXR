@@ -569,6 +569,26 @@ wxr_fini(wxr_t *wxr)
 }
 
 void
+wxr_set_conf(wxr_t *wxr, const wxr_conf_t *conf)
+{
+
+	ASSERT(conf->num_ranges != 0);
+	ASSERT3U(conf->num_ranges, <, WXR_MAX_RANGES);
+	ASSERT3U(conf->res_x, >=, WXR_MIN_RES);
+	ASSERT3U(conf->res_y, >=, WXR_MIN_RES);
+	ASSERT3F(conf->beam_shape.x, >, 0);
+	ASSERT3F(conf->beam_shape.y, >, 0);
+	ASSERT3F(conf->scan_time, >, 0);
+	ASSERT3F(conf->scan_angle, >, 0);
+	ASSERT3F(conf->scan_angle_vert, >=, 0);
+	ASSERT3F(ABS(conf->parked_azi), <=, conf->scan_angle / 2);
+
+	mutex_enter(&wxr->lock);
+	wxr->conf = conf;
+	mutex_exit(&wxr->lock);
+}
+
+void
 wxr_set_acf_pos(wxr_t *wxr, geo_pos3_t pos, vect3_t orient)
 {
 	ASSERT(!IS_NULL_GEO_POS(pos));

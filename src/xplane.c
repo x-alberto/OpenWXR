@@ -57,6 +57,7 @@ static atmo_t		*atmo = NULL;
 static openwxr_intf_t openwxr_intf = {
 	.init = wxr_init,
 	.fini = wxr_fini,
+	.set_conf = wxr_set_conf,
 	.set_acf_pos = wxr_set_acf_pos,
 	.get_acf_pos = wxr_get_acf_pos,
 	.set_scale = wxr_set_scale,

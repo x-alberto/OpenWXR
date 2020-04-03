@@ -293,6 +293,7 @@ open_debug_win(XPLMCommandRef ref, XPLMCommandPhase phase, void *refcon)
 static void
 wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 {
+    static unsigned last_mode = 0;
 	unsigned range = 0;
 	double tilt = 0, gain_ctl = 0.5;
 	double gain = 0;
@@ -322,6 +323,12 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 		sys.power_on_time = 0;
 	}
 
+	if(sys.cur_mode != last_mode)
+    {
+        intf->set_conf(wxr, mode);
+
+        last_mode = sys.cur_mode;
+    }
 	intf->set_standby(wxr, stby);
 	intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.y);
 	intf->set_acf_pos(wxr, pos, orient);
@@ -601,7 +608,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
             LINE_HEIGHT, TEXT_ALIGN_LEFT);
         cairo_show_text(cr, mode_name);
 
-        snprintf(buf, sizeof (buf), "MRK %3.0f", MET2NM(sys.range / 4));
+        snprintf(buf, sizeof (buf), "MRK %.3g", MET2NM(sys.range / 4));
         align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET,
             TEXT_ALIGN_RIGHT);
         cairo_show_text(cr, buf);
