@@ -572,16 +572,16 @@ void
 wxr_set_conf(wxr_t *wxr, const wxr_conf_t *conf)
 {
 
-	ASSERT(conf->num_ranges != 0);
-	ASSERT3U(conf->num_ranges, <, WXR_MAX_RANGES);
-	ASSERT3U(conf->res_x, >=, WXR_MIN_RES);
-	ASSERT3U(conf->res_y, >=, WXR_MIN_RES);
-	ASSERT3F(conf->beam_shape.x, >, 0);
-	ASSERT3F(conf->beam_shape.y, >, 0);
-	ASSERT3F(conf->scan_time, >, 0);
-	ASSERT3F(conf->scan_angle, >, 0);
-	ASSERT3F(conf->scan_angle_vert, >=, 0);
-	ASSERT3F(ABS(conf->parked_azi), <=, conf->scan_angle / 2);
+//	ASSERT(conf->num_ranges != 0);
+//	ASSERT3U(conf->num_ranges, <, WXR_MAX_RANGES);
+//	ASSERT3U(conf->res_x, >=, WXR_MIN_RES);
+//	ASSERT3U(conf->res_y, >=, WXR_MIN_RES);
+//	ASSERT3F(conf->beam_shape.x, >, 0);
+//	ASSERT3F(conf->beam_shape.y, >, 0);
+//	ASSERT3F(conf->scan_time, >, 0);
+//	ASSERT3F(conf->scan_angle, >, 0);
+//	ASSERT3F(conf->scan_angle_vert, >=, 0);
+//	ASSERT3F(ABS(conf->parked_azi), <=, conf->scan_angle / 2);
 
 	mutex_enter(&wxr->lock);
 	wxr->conf = conf;
@@ -822,8 +822,8 @@ wxr_bind_tex(wxr_t *wxr, bool_t shadow_tex)
 		/* initial texture upload, do a sync upload */
 		ASSERT(wxr->cur_tex == 0);
 
-		XPLMGenerateTextureNumbers(wxr->tex, 2);
-		XPLMGenerateTextureNumbers(wxr->shadow_tex, 2);
+		XPLMGenerateTextureNumbers((int *)wxr->tex, 2);
+		XPLMGenerateTextureNumbers((int *)wxr->shadow_tex, 2);
 //		glGenTextures(2, wxr->tex);
 //		glGenTextures(2, wxr->shadow_tex);
 
