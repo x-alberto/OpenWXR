@@ -77,6 +77,8 @@ bool_t wxr_reload_gl_progs(wxr_t *wxr);
 void wxr_set_alert(wxr_t *wxr, bool_t flag);
 bool_t wxr_get_alert(wxr_t *wxr);
 
+GLuint wxr_get_cur_tex(wxr_t *wxr, bool_t shadow_tex);
+
 #ifdef __cplusplus
 }
 #endif

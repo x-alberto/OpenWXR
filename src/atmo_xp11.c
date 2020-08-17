@@ -389,7 +389,7 @@ update_efis(void)
 	 * all the time so we can read the map.
 	 */
     bool_t mode = get_mode();
-	if (dr_getf(&drs.EFIS.instr_brt) != 1.0)
+	if (dr_getf(&drs.EFIS.instr_brt) < 1.0)
 		dr_setf(&drs.EFIS.instr_brt, 1.0);
 	if (dr_geti(&drs.EFIS.mode) != EFIS_MODE_NORM)
 		dr_seti(&drs.EFIS.mode, EFIS_MODE_NORM);
@@ -479,8 +479,6 @@ update_precip(void)
 			    tmp_0_alt, tmp_minus_20_alt, B_TRUE));
 		}
 	}
-
-	fx_lin_multi(0, xp11_atmo.precip_nodes, B_FALSE);
 }
 
 static void

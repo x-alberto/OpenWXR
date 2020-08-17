@@ -34,6 +34,9 @@ PLUGIN_API void XPluginStop(void);
 PLUGIN_API int XPluginEnable(void);
 PLUGIN_API void XPluginDisable(void);
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID from, int msg, void *param);
+#if IBM
+BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID resvd);
+#endif // IBM
 
 const char *get_xpdir(void);
 const char *get_plugindir(void);

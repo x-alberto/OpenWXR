@@ -895,7 +895,7 @@ parse_conf_file(const conf_t *conf)
 	else sys.ui_style = 0;
 	for (unsigned i = 0; i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
-		const char *str;
+		//const char *str;
 
 		conf_get_d_v(conf, "scr/%d/x", &scr->x, i);
 		conf_get_d_v(conf, "scr/%d/y", &scr->y, i);
