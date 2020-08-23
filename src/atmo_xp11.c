@@ -808,3 +808,4 @@ atmo_xp11_set_efis_pos(unsigned x, unsigned y, unsigned w, unsigned h)
 
 	mutex_exit(&xp11_atmo.lock);
 }
+
