@@ -25,7 +25,7 @@ SPIRVX_TGT_VERSION=120
 SPIRVX_420_VERSION=420
 SPIRVX_430_VERSION=430
 
-GLSLANG=glslang
+GLSLANG=glslangValidator
 SPIRVX=spirv-cross
 GLSL_CLEANUP=./glsl_cleanup.sh
 
@@ -88,3 +88,4 @@ $(addprefix $(OUTDIR)/,$(SPVS)) : | $(OUTDIR)
 
 $(OUTDIR) :
 	mkdir -p $(OUTDIR)
+
