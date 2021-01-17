@@ -86,7 +86,7 @@ win32:contains(CROSS_COMPILE, x86_64-w64-mingw32-) {
 	LIBS += -L$$[LIBACFUTILS]/OpenAL/libs/Win64 -lOpenAL32
 	LIBS += -L$$[LIBACFUTILS]/GL_for_Windows/lib -lglu32 -lopengl32
 
-	LIBS += -ldbghelp
+	LIBS += -ldbghelp -static
 }
 
 unix:!macx {
