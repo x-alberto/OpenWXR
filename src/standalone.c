@@ -329,6 +329,7 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 
         last_mode = sys.cur_mode;
     }
+
 	wxr_intf->set_standby(wxr, stby);
 	wxr_intf->set_stab(wxr, aux->stab_lim.x, aux->stab_lim.y);
 	wxr_intf->set_acf_pos(wxr, pos, orient);
