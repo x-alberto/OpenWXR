@@ -35,7 +35,7 @@ INCLUDEPATH += $$[OPENGPWS]/api
 # Needed for openwxr/xplane_api.h
 INCLUDEPATH += ../api
 
-QMAKE_CFLAGS += -O2 -std=c99 -g -W -Wall -Wextra -Werror -fvisibility=hidden \
+QMAKE_CFLAGS += -O2 -std=c11 -g -W -Wall -Wextra -Werror -fvisibility=hidden \
     -Wno-unused-local-typedefs -Wunused-result
 
 # Make sure to disable Qmake's own warnings system, because it overrides
@@ -50,7 +50,7 @@ QMAKE_CXXFLAGS_WARN_ON -= -W -Wall -Wextra
 DEFINES += _GNU_SOURCE DEBUG _FILE_OFFSET_BITS=64
 
 # Latest X-Plane APIs. No legacy support needed.
-DEFINES += XPLM200 XPLM210 XPLM300 XPLM301 GLEW_BUILD=GLEW_STATIC
+DEFINES += XPLM200 XPLM210 XPLM300 XPLM301 XPLM302 XPLM303 GLEW_BUILD=GLEW_STATIC
 
 # Grab the latest tag as the version number for a release version.
 # (TODO: beta builds are only identified by the git commit ID)
@@ -86,7 +86,7 @@ win32:contains(CROSS_COMPILE, x86_64-w64-mingw32-) {
 	LIBS += -L$$[LIBACFUTILS]/OpenAL/libs/Win64 -lOpenAL32
 	LIBS += -L$$[LIBACFUTILS]/GL_for_Windows/lib -lglu32 -lopengl32
 
-	LIBS += -ldbghelp -static
+	LIBS += -ldbghelp
 }
 
 unix:!macx {

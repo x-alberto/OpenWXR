@@ -52,12 +52,18 @@
 #define	COLOR(c, scr)	((c) * ((pow(4.0, (scr)->brt / 0.75)) / 4.0))
 #define	CYAN_RGB(scr)	COLOR(0, (scr)), COLOR(0.66, (scr)), COLOR(0.66, (scr))
 #define	YELLOW_RGB(scr)	COLOR(1, (scr)), COLOR(0.8, (scr)), COLOR(0, (scr))
-
+#define	RED_RGB(scr)	COLOR(1, (scr)), COLOR(0, (scr)), COLOR(0, (scr))
+#define	GREEN_RGB(scr)	COLOR(0, (scr)), COLOR(1, (scr)), COLOR(0, (scr))
+#define	BLACK_RGB(scr)	COLOR(0, (scr)), COLOR(0, (scr)), COLOR(0, (scr))
+#define	PURPLE_RGB(scr)	COLOR(0.5, (scr)), COLOR(0, (scr)), COLOR(0.5, (scr))
+#define	CYAN2_RGB(scr)	COLOR(0, (scr)), COLOR(0.7, (scr)), COLOR(0.9, (scr))
+#define	GREEN2_RGB(scr)	COLOR(0.2, (scr)), COLOR(0.6, (scr)), COLOR(0.2, (scr))
 static bool_t inited = B_FALSE;
 
 typedef enum {
 	RDR4B,
-	RDR2000
+	RDR2000,
+	WXR270
 } ui_style_t;
 
 typedef enum {
@@ -90,7 +96,11 @@ typedef struct wxr_sys_s wxr_sys_t;
 typedef struct {
 	double			x, y;
 	double			w, h;
+	double			scale;
+	double          hrat;
 	double			underscan;
+	double          voffset;
+	double          rvoffset;
 	struct wxr_sys_s	*sys;
 	mt_cairo_render_t	*mtcr;
 	double			fps;
@@ -172,6 +182,15 @@ static struct {
 	dr_t		panel_render_type;
 	dr_t		pitch, roll, hdg;
 } drs;
+
+static struct {
+	dr_t	drefs_int[16];
+	dr_t	drefs_float[16];
+	int     dref_val_int[16];
+	double   dref_val_float[16];
+    unsigned num_int;
+    unsigned num_float;
+} cdrs;
 
 static XPLMPluginID openwxr = XPLM_NO_PLUGIN_ID;
 static void *atmo = NULL;
@@ -511,11 +530,11 @@ draw_cb(XPLMDrawingPhase phase, int before, void *refcon)
 	for (unsigned i = 0; wxr != NULL && i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
 		double center_x = scr->x + scr->w / 2;
-		double sz = scr->h * scr->underscan;
+		double sz = scr->h * scr->underscan * scr->scale;
 
-		wxr_intf->draw(wxr, VECT2(center_x - sz, scr->y),
-		    VECT2(2 * sz, sz));
-		mt_cairo_render_draw(scr->mtcr, VECT2(scr->x, scr->y),
+		wxr_intf->draw(wxr, VECT2(center_x - sz, scr->y + scr->voffset + scr->rvoffset),
+		    VECT2(2 * sz, sz * scr->hrat));
+		mt_cairo_render_draw(scr->mtcr, VECT2(scr->x, scr->y + scr->voffset),
 		    VECT2(scr->w, scr->h));
 	}
 
@@ -576,6 +595,31 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
     case RDR4B:
         cairo_set_source_rgb(cr, CYAN_RGB(scr));
         cairo_set_line_width(cr, 1);
+        if(sys.cur_mode == 1){
+            cairo_save(cr);
+            cairo_move_to(cr, 0, 0);
+            double r = (WXR_RES_Y /4)/2;
+            cairo_set_source_rgb(cr, GREEN_RGB(scr));
+            cairo_set_line_width(cr, WXR_RES_Y / 4);
+
+            cairo_arc(cr, 0, 0, r, DEG2RAD(180), DEG2RAD(360));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+            cairo_arc(cr, 0, 0, r*3, DEG2RAD(180), DEG2RAD(360));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, RED_RGB(scr));
+            cairo_arc(cr, 0, 0, r*5, DEG2RAD(180), DEG2RAD(360));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, PURPLE_RGB(scr));
+            cairo_arc(cr, 0, 0, r*7, DEG2RAD(180), DEG2RAD(360));
+            cairo_stroke(cr);
+
+            cairo_restore(cr);
+        }
+
         for (int angle = -90; angle <= 90; angle += 30) {
             cairo_save(cr);
             cairo_rotate(cr, DEG2RAD(angle));
@@ -602,7 +646,7 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         cairo_show_text(cr, buf);
 
         mutex_enter(&sys.mode_lock);
-        strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
+            strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
         mutex_exit(&sys.mode_lock);
 
         align_text(cr, mode_name, -WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET +
@@ -656,7 +700,6 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         dashes[0] = 2;
         dashes[1] = 7;
         cairo_set_dash(cr, dashes, 2, 0);
-        //cairo_set_line_width(cr, 2);
         cairo_move_to(cr, 0, 0);
         cairo_rel_line_to(cr, 0, -WXR_RES_Y);
         cairo_stroke(cr);
@@ -742,6 +785,179 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         }
 
         break;
+        case WXR270: ;
+        int offset = -10;
+
+        cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
+        cairo_set_font_size(cr, FONT_SZ);
+
+        if(sys.cur_mode == 2){
+            cairo_save(cr);
+            double r =((WXR_RES_Y + offset) / 5)/2;
+            cairo_set_source_rgb(cr, GREEN_RGB(scr));
+            cairo_set_line_width(cr, ((WXR_RES_Y + offset) / 5)/2);
+
+            cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+            cairo_set_line_width(cr, ((WXR_RES_Y + offset) / 5));
+            cairo_arc(cr, 0, offset, r*2, DEG2RAD(210), DEG2RAD(330));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, RED_RGB(scr));
+
+            cairo_arc(cr, 0, offset, r*4, DEG2RAD(210), DEG2RAD(330));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+
+            cairo_arc(cr, 0, offset, r*6, DEG2RAD(210), DEG2RAD(330));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, GREEN_RGB(scr));
+            cairo_set_line_width(cr, ((WXR_RES_Y + offset) / 5)/2);
+            cairo_arc(cr, 0, offset, r*7 + r/2, DEG2RAD(210), DEG2RAD(330));
+            cairo_stroke(cr);
+            cairo_restore(cr);
+        }
+
+        if(sys.cur_mode == 4) cairo_set_source_rgb(cr, GREEN2_RGB(scr) );
+        else cairo_set_source_rgb(cr, CYAN2_RGB(scr) );
+        cairo_set_line_width(cr, 3);
+        cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
+        cairo_move_to(cr, 0, -2);
+        cairo_rel_line_to(cr, 0, -8);
+        cairo_move_to(cr, 0, -8);
+        cairo_rel_line_to(cr, -5, 5);
+        cairo_move_to(cr, 0, -8);
+        cairo_rel_line_to(cr, 5, 5);
+        cairo_move_to(cr, 0, -2);
+        cairo_rel_line_to(cr, -2, 2);
+        cairo_move_to(cr, 0, -2);
+        cairo_rel_line_to(cr, 2, 2);
+        cairo_stroke (cr);
+        cairo_set_line_width(cr, 2);
+
+      for (int i = 0; i < 5; i++) {
+            double r = ((WXR_RES_Y + offset) / 5) * (i + 1);
+            cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+            if( i == 0){
+                for (int angle = 150; angle <= 210; angle += 30) {
+                    double ang = DEG2RAD(angle);
+                    double x = r*sin(ang);
+                    double y = r*cos(ang);
+                    double x2 = (r+5)*sin(ang);
+                    double y2 = (r+5)*cos(ang);
+                    cairo_move_to(cr, x, y + offset);
+                    cairo_line_to(cr, x2, y2 + offset);
+                    cairo_stroke(cr);
+                }
+
+                double ang = DEG2RAD(120);
+                double x = r*sin(ang);
+                double y = r*cos(ang);
+                snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range)/5);
+                align_text(cr, buf, x + 5, y + FONT_SZ/2 + offset, TEXT_ALIGN_LEFT);
+                cairo_show_text(cr, buf);
+
+            }
+            else if(i == 4){
+                for (int angle = 150; angle <= 210; angle += 30) {
+                    double ang = DEG2RAD(angle);
+                    double x = r*sin(ang);
+                    double y = r*cos(ang);
+                    double x2 = (r-5)*sin(ang);
+                    double y2 = (r-5)*cos(ang);
+                    cairo_move_to(cr, x , y + offset);
+                    cairo_line_to(cr, x2, y2 + offset);
+                    cairo_stroke(cr);
+                }
+                double ang = DEG2RAD(150);
+                double x = (r+FONT_SZ*2)*sin(ang);
+                double y = (r+FONT_SZ*2)*cos(ang);
+
+                snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range));
+                align_text(cr, buf, x - 10, y + 10 + FONT_SZ + offset, TEXT_ALIGN_LEFT);
+                cairo_show_text(cr, buf);
+
+            }
+            else{
+                for (int angle = 150; angle <= 210; angle += 30) {
+                    double ang = DEG2RAD(angle);
+                    double x = (r-5)*sin(ang);
+                    double y = (r-5)*cos(ang);
+                    double x2 = (r+5)*sin(ang);
+                    double y2 = (r+5)*cos(ang);
+                    cairo_move_to(cr, x, y + offset);
+                    cairo_line_to(cr, x2, y2 + offset);
+
+                    cairo_stroke(cr);
+                }
+
+                double ang = DEG2RAD(120);
+
+                if(i == 3){
+                   ang = DEG2RAD(140);
+                }
+
+                double x = r*sin(ang);
+                double y = r*cos(ang);
+
+                snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range)/5*(i+1));
+
+
+                if(i == 3){
+                    cairo_save(cr);
+                    cairo_text_extents_t te;
+                    cairo_text_extents(cr, buf, &te);
+                    cairo_set_source_rgb(cr, BLACK_RGB(scr));
+                    cairo_set_line_width(cr, 1);
+
+                    cairo_rectangle(cr,  x + 6, y + FONT_SZ/2 - te.height/2 + offset, te.width, te.height);
+                    cairo_stroke_preserve(cr);
+                    cairo_fill(cr);
+                    cairo_restore(cr);
+                    }
+
+                    align_text(cr, buf, x + 5, y + FONT_SZ/2 + offset, TEXT_ALIGN_LEFT);
+                    cairo_show_text(cr, buf);
+
+                    if (i==2){
+                        ang = DEG2RAD(245);
+                        x = r*sin(ang) + offset;
+                        y = r*cos(ang) + offset;
+                        mutex_enter(&sys.mode_lock);
+                        if(wxr != NULL && wxr_intf->get_gain(wxr) != DFL_GAIN && sys.modes[sys.cur_mode].is_stby == B_FALSE){
+                            strlcpy(mode_name, "GAIN", sizeof (mode_name));
+                        }
+                        else{
+                            strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
+                        }
+                        mutex_exit(&sys.mode_lock);
+                        align_text(cr, mode_name, x , y + FONT_SZ/2 + offset, TEXT_ALIGN_CENTER);
+                        cairo_show_text(cr, mode_name);
+                    }
+            }
+            cairo_stroke(cr);
+        }
+        if(wxr != NULL && wxr_intf->get_gain(wxr) == DFL_GAIN && sys.modes[sys.cur_mode].is_stby == B_FALSE){
+                snprintf(buf, sizeof (buf), "T");
+                cairo_save(cr);
+                cairo_text_extents_t te;
+                cairo_text_extents(cr, buf, &te);
+                cairo_set_source_rgb(cr, RED_RGB(scr));
+                cairo_set_line_width(cr, 1);
+                cairo_rectangle(cr,  WXR_RES_X/3 - 1 , -WXR_RES_Y, te.x_advance + 2, te.height + 2);
+                cairo_stroke_preserve(cr);
+                cairo_fill(cr);
+                cairo_restore(cr);
+
+                cairo_set_source_rgb(cr, BLACK_RGB(scr));
+                align_text(cr, buf, WXR_RES_X/3 , -WXR_RES_Y - TOP_OFFSET*2, TEXT_ALIGN_LEFT);
+                cairo_show_text(cr, buf);
+        }
+        break;
     default:
         break;
     }
@@ -776,6 +992,24 @@ static void
 parse_conf_file(const conf_t *conf)
 {
 	const char *str;
+	if(conf_get_i(conf, "cdref_int/num", (int *)&cdrs.num_int)){
+        cdrs.num_int = clampi(cdrs.num_int, 0, 16);
+        for(unsigned i = 0; i < cdrs.num_int; i++){
+            if (conf_get_str_v(conf, "cdrint/%d/", &str, i)){
+                dr_create_i(&cdrs.drefs_int[i], &cdrs.dref_val_int[i], B_TRUE, str, i);
+                conf_get_i_v(conf, "cdrint/%d/val", (int *)&cdrs.dref_val_int[i], i);
+            }
+        }
+	}
+	if(conf_get_i(conf, "cdref_float/num", (int *)&cdrs.num_float)){
+        cdrs.num_float = clampi(cdrs.num_float, 0, 16);
+        for(unsigned i = 0; i < cdrs.num_float; i++){
+            if (conf_get_str_v(conf, "cdrfloat/%d/", &str, i)){
+                dr_create_f64(&cdrs.drefs_float[i], &cdrs.dref_val_float[i], B_TRUE, str, i);
+                conf_get_d_v(conf, "cdrfloat/%d/val", &cdrs.dref_val_float[i], i);
+            }
+        }
+	}
 
 	conf_get_i(conf, "efis/x", (int *)&sys.efis_xywh[0]);
 	conf_get_i(conf, "efis/y", (int *)&sys.efis_xywh[1]);
@@ -892,7 +1126,7 @@ parse_conf_file(const conf_t *conf)
 	sys.num_screens = clampi(sys.num_screens, 0, MAX_SCREENS);
 
     if (conf_get_i(conf, "ui/style", (int *)&sys.ui_style))
-	sys.ui_style = clampi(sys.ui_style, 0, 1);
+	sys.ui_style = clampi(sys.ui_style, 0, 2);
 	else sys.ui_style = 0;
 	for (unsigned i = 0; i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
@@ -912,11 +1146,6 @@ parse_conf_file(const conf_t *conf)
 		scr->underscan = 1.0;
 		conf_get_d_v(conf, "scr/%d/underscan", &scr->underscan, i);
 
-		if (conf_get_str_v(conf, "scr/%d/brt_dr", &str, i)) {
-			strlcpy(scr->brt_dr.name, str,
-			    sizeof (scr->brt_dr.name));
-		}
-
 		if (conf_get_str_v(conf, "scr/%d/power_dr", &str, i)) {
 			strlcpy(scr->power_dr.name, str,
 			    sizeof (scr->power_dr.name));
@@ -935,6 +1164,23 @@ parse_conf_file(const conf_t *conf)
 		scr->mtcr = mt_cairo_render_init(scr->w, scr->h, scr->fps,
 		    NULL, render_cb, NULL, scr);
 		scr->sys = &sys;
+
+		if (conf_get_str_v(conf, "scr/%d/brt_dr", &str, i)) {
+			strlcpy(scr->brt_dr.name, str,
+			    sizeof (scr->brt_dr.name));
+		}
+
+		scr->rvoffset = 0.0;
+		conf_get_d_v(conf, "scr/%d/rvoff", &scr->rvoffset, i);
+
+		scr->voffset = 0.0;
+		conf_get_d_v(conf, "scr/%d/voff", &scr->voffset, i);
+
+		scr->hrat = 1.0;
+		conf_get_d_v(conf, "scr/%d/hrat", &scr->hrat, i);
+
+		scr->scale = 1.0;
+		conf_get_d_v(conf, "scr/%d/scale", &scr->scale, i);
 	}
 }
 
@@ -1006,6 +1252,13 @@ sa_fini(void)
 	inited = B_FALSE;
 
 	XPLMUnregisterCommandHandler(open_debug_cmd, open_debug_win, 0, NULL);
+
+	for(unsigned i = 0; i < cdrs.num_int; i++){
+        dr_delete(&cdrs.drefs_int[i]);
+	}
+	for(unsigned i = 0; i < cdrs.num_float; i++){
+        dr_delete(&cdrs.drefs_float[i]);
+	}
 
 	for (unsigned i = 0; i < sys.num_screens; i++) {
 		if (sys.screens[i].mtcr != NULL)
