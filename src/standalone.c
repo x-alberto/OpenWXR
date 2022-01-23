@@ -790,13 +790,16 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
+        cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
+        cairo_set_line_width(cr, 2);
 
         if(sys.cur_mode == 2){
+
             cairo_save(cr);
+            cairo_set_line_cap (cr, CAIRO_LINE_CAP_BUTT);
             double r =((WXR_RES_Y + offset) / 5)/2;
             cairo_set_source_rgb(cr, GREEN_RGB(scr));
             cairo_set_line_width(cr, ((WXR_RES_Y + offset) / 5)/2);
-
             cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
             cairo_stroke(cr);
 
@@ -806,12 +809,10 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
             cairo_stroke(cr);
 
             cairo_set_source_rgb(cr, RED_RGB(scr));
-
             cairo_arc(cr, 0, offset, r*4, DEG2RAD(210), DEG2RAD(330));
             cairo_stroke(cr);
 
             cairo_set_source_rgb(cr, YELLOW_RGB(scr));
-
             cairo_arc(cr, 0, offset, r*6, DEG2RAD(210), DEG2RAD(330));
             cairo_stroke(cr);
 
@@ -824,8 +825,9 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
         if(sys.cur_mode == 4) cairo_set_source_rgb(cr, GREEN2_RGB(scr) );
         else cairo_set_source_rgb(cr, CYAN2_RGB(scr) );
+
+        cairo_save(cr);
         cairo_set_line_width(cr, 3);
-        cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
         cairo_move_to(cr, 0, -2);
         cairo_rel_line_to(cr, 0, -8);
         cairo_move_to(cr, 0, -8);
@@ -837,12 +839,14 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
         cairo_move_to(cr, 0, -2);
         cairo_rel_line_to(cr, 2, 2);
         cairo_stroke (cr);
-        cairo_set_line_width(cr, 2);
+        cairo_restore(cr);
 
       for (int i = 0; i < 5; i++) {
             double r = ((WXR_RES_Y + offset) / 5) * (i + 1);
-            cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+
             if( i == 0){
+                cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+                cairo_stroke(cr);
                 for (int angle = 150; angle <= 210; angle += 30) {
                     double ang = DEG2RAD(angle);
                     double x = r*sin(ang);
@@ -862,7 +866,32 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 cairo_show_text(cr, buf);
 
             }
+            else if(i == 3){
+                cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(310));
+                cairo_stroke(cr);
+                cairo_arc(cr, 0, offset, r, DEG2RAD(319), DEG2RAD(330));
+                cairo_stroke(cr);
+                for (int angle = 150; angle <= 210; angle += 30) {
+                    double ang = DEG2RAD(angle);
+                    double x = (r-5)*sin(ang);
+                    double y = (r-5)*cos(ang);
+                    double x2 = (r+5)*sin(ang);
+                    double y2 = (r+5)*cos(ang);
+                    cairo_move_to(cr, x, y + offset);
+                    cairo_line_to(cr, x2, y2 + offset);
+                    cairo_stroke(cr);
+                }
+                double ang = DEG2RAD(140);
+                double x = r*sin(ang);
+                double y = r*cos(ang);
+
+                snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range)/5*(i+1));
+                align_text(cr, buf, x + 10 , y + FONT_SZ/2 + offset, TEXT_ALIGN_CENTER);
+                cairo_show_text(cr, buf);
+            }
             else if(i == 4){
+                cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+                cairo_stroke(cr);
                 for (int angle = 150; angle <= 210; angle += 30) {
                     double ang = DEG2RAD(angle);
                     double x = r*sin(ang);
@@ -883,6 +912,8 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 
             }
             else{
+                cairo_arc(cr, 0, offset, r, DEG2RAD(210), DEG2RAD(330));
+                cairo_stroke(cr);
                 for (int angle = 150; angle <= 210; angle += 30) {
                     double ang = DEG2RAD(angle);
                     double x = (r-5)*sin(ang);
@@ -896,48 +927,27 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 }
 
                 double ang = DEG2RAD(120);
-
-                if(i == 3){
-                   ang = DEG2RAD(140);
-                }
-
                 double x = r*sin(ang);
                 double y = r*cos(ang);
 
                 snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range)/5*(i+1));
-
-
-                if(i == 3){
-                    cairo_save(cr);
-                    cairo_text_extents_t te;
-                    cairo_text_extents(cr, buf, &te);
-                    cairo_set_source_rgb(cr, BLACK_RGB(scr));
-                    cairo_set_line_width(cr, 1);
-
-                    cairo_rectangle(cr,  x + 6, y + FONT_SZ/2 - te.height/2 + offset, te.width, te.height);
-                    cairo_stroke_preserve(cr);
-                    cairo_fill(cr);
-                    cairo_restore(cr);
+                align_text(cr, buf, x + 5, y + FONT_SZ/2 + offset, TEXT_ALIGN_LEFT);
+                cairo_show_text(cr, buf);
+                if (i==2){
+                    ang = DEG2RAD(245);
+                    x = r*sin(ang) + offset;
+                    y = r*cos(ang) + offset;
+                    mutex_enter(&sys.mode_lock);
+                    if(wxr != NULL && wxr_intf->get_gain(wxr) != DFL_GAIN && sys.modes[sys.cur_mode].is_stby == B_FALSE){
+                        strlcpy(mode_name, "GAIN", sizeof (mode_name));
                     }
-
-                    align_text(cr, buf, x + 5, y + FONT_SZ/2 + offset, TEXT_ALIGN_LEFT);
-                    cairo_show_text(cr, buf);
-
-                    if (i==2){
-                        ang = DEG2RAD(245);
-                        x = r*sin(ang) + offset;
-                        y = r*cos(ang) + offset;
-                        mutex_enter(&sys.mode_lock);
-                        if(wxr != NULL && wxr_intf->get_gain(wxr) != DFL_GAIN && sys.modes[sys.cur_mode].is_stby == B_FALSE){
-                            strlcpy(mode_name, "GAIN", sizeof (mode_name));
-                        }
-                        else{
-                            strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
-                        }
-                        mutex_exit(&sys.mode_lock);
-                        align_text(cr, mode_name, x , y + FONT_SZ/2 + offset, TEXT_ALIGN_CENTER);
-                        cairo_show_text(cr, mode_name);
+                    else{
+                        strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
                     }
+                    mutex_exit(&sys.mode_lock);
+                    align_text(cr, mode_name, x , y + FONT_SZ/2 + offset, TEXT_ALIGN_CENTER);
+                    cairo_show_text(cr, mode_name);
+                }
             }
             cairo_stroke(cr);
         }
@@ -951,11 +961,32 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 cairo_rectangle(cr,  WXR_RES_X/3 - 1 , -WXR_RES_Y, te.x_advance + 2, te.height + 2);
                 cairo_stroke_preserve(cr);
                 cairo_fill(cr);
-                cairo_restore(cr);
 
-                cairo_set_source_rgb(cr, BLACK_RGB(scr));
+
+                cairo_set_source_rgb(cr, YELLOW_RGB(scr));
                 align_text(cr, buf, WXR_RES_X/3 , -WXR_RES_Y - TOP_OFFSET*2, TEXT_ALIGN_LEFT);
                 cairo_show_text(cr, buf);
+                cairo_stroke(cr);
+                cairo_restore(cr);
+        }
+        if (wxr != NULL) {
+            cairo_save(cr);
+            double tilt = wxr_intf->get_ant_pitch(wxr);
+            if(sys.cur_mode == 4) cairo_set_source_rgb(cr, GREEN2_RGB(scr) );
+            else cairo_set_source_rgb(cr, CYAN2_RGB(scr) );
+            if (tilt >= 0.05)
+                snprintf(buf, sizeof (buf), "%.1f\u2191", tilt);
+            else if (tilt <= -0.05)
+                snprintf(buf, sizeof (buf), "%.1f\u2193", ABS(tilt));
+            else
+                snprintf(buf, sizeof (buf), "0.0\u00a0");
+            align_text(cr, buf, WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_RIGHT);
+            cairo_show_text(cr, buf);
+            snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr) - MIN_GAIN);
+            align_text(cr, buf, -WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_LEFT);
+            cairo_show_text(cr, buf);
+            cairo_stroke(cr);
+            cairo_restore(cr);
         }
         break;
     default:
