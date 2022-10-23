@@ -58,12 +58,17 @@
 #define	PURPLE_RGB(scr)	COLOR(0.5, (scr)), COLOR(0, (scr)), COLOR(0.5, (scr))
 #define	CYAN2_RGB(scr)	COLOR(0, (scr)), COLOR(0.7, (scr)), COLOR(0.9, (scr))
 #define	GREEN2_RGB(scr)	COLOR(0.2, (scr)), COLOR(0.6, (scr)), COLOR(0.2, (scr))
+#define	WHITE_RGB(scr)	COLOR(1, (scr)), COLOR(1, (scr)), COLOR(1, (scr))
+#define	GRAY_RGB(scr)	COLOR(0.3, (scr)), COLOR(0.3, (scr)), COLOR(0.3, (scr))
+#define	BLUE_RGB(scr)	COLOR(0, (scr)), COLOR(0, (scr)), COLOR(1, (scr))
+#define	LIGHT_BLUE_RGB(scr)	COLOR(0.4, (scr)), COLOR(0.4, (scr)), COLOR(1, (scr))
 static bool_t inited = B_FALSE;
 
 typedef enum {
 	RDR4B,
 	RDR2000,
-	WXR270
+	WXR270,
+	KONTUR
 } ui_style_t;
 
 typedef enum {
@@ -97,6 +102,7 @@ typedef struct {
 	double			x, y;
 	double			w, h;
 	double			scale;
+	double			vert_mode_scale;
 	double          hrat;
 	double			underscan;
 	double          voffset;
@@ -147,8 +153,12 @@ struct wxr_sys_s {
 	delayed_dr_t		tilt_dr;
 	delayed_dr_t		range_dr;
 	delayed_dr_t		gain_dr;
+	delayed_dr_t		sepn_dr;
 	delayed_dr_t		trk_dr;
 	delayed_dr_t        stab_dr;
+	delayed_dr_t		nav_dr;
+	delayed_dr_t        vp_dr;
+
 
 	delayed_ctl_t		power_sw_ctl;
 	delayed_ctl_t		mode_ctl;
@@ -162,6 +172,10 @@ struct wxr_sys_s {
 
 	double          alert_rate;
 	int             trk;
+	unsigned		nav;
+	unsigned		vp;
+	bool_t			shadow_enable;
+	double          sepn;
     bool_t	    	trk_timer_flag;
     bool_t          alert_timer_flag;
     //unsigned    stab_mode;
@@ -316,8 +330,10 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	unsigned range = 0;
 	double tilt = 0, gain_ctl = 0.5;
 	double gain = 0;
+	double sepn = 0;
 	double trk = 0;
     unsigned stab = 1;
+	unsigned vert = 0;
 
 	bool_t power_on = B_TRUE, power_sw_on = B_TRUE, stby = B_FALSE;
 	geo_pos3_t pos =
@@ -345,7 +361,6 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 	if(sys.cur_mode != last_mode)
     {
         wxr_intf->set_conf(wxr, mode);
-
         last_mode = sys.cur_mode;
     }
 
@@ -400,13 +415,22 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
 		gain = wavg(MIN_GAIN, MAX_GAIN, clamp(gain_ctl, 0, 1));
 	wxr_intf->set_gain(wxr, gain);
 
+	DELAYED_DR_OP(&sys.sepn_dr,
+	    sepn = dr_getf(&sys.sepn_dr.dr));
+	sys.sepn = clamp(sepn, 0, 1);
+	sys.aux[2].colors[1].min_val = 0.8*(1 - sys.sepn/2);
+
     DELAYED_DR_OP(&sys.trk_dr,
             trk = dr_geti(&sys.trk_dr.dr));
         if(sys.trk != trk){
             sys.trk_timer_flag = B_TRUE;
             XPLMSetFlightLoopCallbackInterval(trk_timer_cb, 15, 1, NULL);
+			sys.trk = clamp(trk, -90, 90);
+			if(wxr_intf->get_vert_mode(wxr) == B_TRUE){
+				wxr_intf->set_vert_mode(wxr, B_TRUE, (float)sys.trk);
+			}
         }
-        sys.trk = clamp(trk, -90, 90);
+
 
     DELAYED_DR_OP(&sys.stab_dr,
             stab = dr_geti(&sys.stab_dr.dr));
@@ -418,6 +442,21 @@ wxr_config(float d_t, const wxr_conf_t *mode, mode_aux_info_t *aux)
             {
                wxr_intf->set_stab(wxr, 0, 0);
             }
+	DELAYED_DR_OP(&sys.nav_dr,
+            sys.nav = dr_geti(&sys.nav_dr.dr));
+	DELAYED_DR_OP(&sys.vp_dr,
+            vert = dr_geti(&sys.vp_dr.dr));
+		if (vert != sys.vp){
+			sys.vp = vert;
+			if (vert == 1){
+				wxr_intf->set_vert_mode(wxr, B_TRUE, (float)sys.trk);
+			}
+			else{
+				wxr_intf->set_vert_mode(wxr, B_FALSE, 0.0);
+			}
+		}
+
+	if(wxr_intf->get_beam_shadow(wxr) != sys.shadow_enable) wxr_intf->set_beam_shadow(wxr, sys.shadow_enable);
 
 }
 
@@ -529,11 +568,20 @@ draw_cb(XPLMDrawingPhase phase, int before, void *refcon)
 
 	for (unsigned i = 0; wxr != NULL && i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
-		double center_x = scr->x + scr->w / 2;
-		double sz = scr->h * scr->underscan * scr->scale;
+		if( wxr_intf->get_vert_mode(wxr) == B_TRUE){
+			double center_y = scr->y + scr->h / 2;
+			double sz = scr->w * scr->scale * scr->vert_mode_scale;
 
-		wxr_intf->draw(wxr, VECT2(center_x - sz, scr->y + scr->voffset + scr->rvoffset),
-		    VECT2(2 * sz, sz * scr->hrat));
+			wxr_intf->draw(wxr, VECT2(scr->x, center_y - sz),
+				VECT2 (sz, sz * 2) );
+		}
+		else{
+			double center_x = scr->x + scr->w / 2;
+			double sz = scr->h * scr->underscan * scr->scale;
+
+			wxr_intf->draw(wxr, VECT2(center_x - sz, scr->y + scr->voffset + scr->rvoffset),
+				VECT2(2 * sz, sz * scr->hrat));
+		}
 		mt_cairo_render_draw(scr->mtcr, VECT2(scr->x, scr->y + scr->voffset),
 		    VECT2(scr->w, scr->h));
 	}
@@ -590,7 +638,8 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
 	char buf[16];
 	double dashes[] = { 5, 5 };
 	char mode_name[16];
-
+	int offset = -10;
+	if (wxr != NULL) {
     switch(sys.ui_style){
     case RDR4B:
         cairo_set_source_rgb(cr, CYAN_RGB(scr));
@@ -658,135 +707,269 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
             TEXT_ALIGN_RIGHT);
         cairo_show_text(cr, buf);
 
-        if (wxr != NULL) {
-            double tilt = wxr_intf->get_ant_pitch(wxr);
+        if (sys.tilt >= 0.05)
+            snprintf(buf, sizeof (buf), "%.1f\u2191", sys.tilt);
+        else if (sys.tilt <= -0.05)
+            snprintf(buf, sizeof (buf), "%.1f\u2193", ABS(sys.tilt));
+        else
+            snprintf(buf, sizeof (buf), "0.0\u00a0");
+        align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET +
+            LINE_HEIGHT, TEXT_ALIGN_RIGHT);
+        cairo_show_text(cr, buf);
 
-            if (tilt >= 0.05)
-                snprintf(buf, sizeof (buf), "%.1f\u2191", tilt);
-            else if (tilt <= -0.05)
-                snprintf(buf, sizeof (buf), "%.1f\u2193", ABS(tilt));
-            else
-                snprintf(buf, sizeof (buf), "0.0\u00a0");
-            align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y + TOP_OFFSET +
-                LINE_HEIGHT, TEXT_ALIGN_RIGHT);
-            cairo_show_text(cr, buf);
-        }
         break;
     case RDR2000:
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
 
-        if(sys.trk_timer_flag == B_TRUE){
-        cairo_set_source_rgb(cr, YELLOW_RGB(scr));
-        dashes[0] = 3;
-        dashes[1] = 3;
-        cairo_set_line_width(cr, 2);
-        cairo_save(cr);
-        cairo_move_to(cr, 0, 0);
-        cairo_rotate(cr, DEG2RAD(sys.trk));
-        cairo_rel_line_to(cr, 0, -WXR_RES_Y);
-        cairo_stroke(cr);
-        cairo_restore(cr);
+		if(wxr_intf->get_vert_mode(wxr) == B_FALSE){
 
-            snprintf(buf, sizeof (buf), "%2u\u00B0", ABS(sys.trk));
-            align_text(cr, buf, -WXR_RES_X / 2 + FONT_SZ*2, -WXR_RES_Y - TOP_OFFSET*2 +
-            LINE_HEIGHT,
-                TEXT_ALIGN_RIGHT);
-            cairo_show_text(cr, buf);
-
-        }
-
-        cairo_set_source_rgb(cr, CYAN_RGB(scr));
-        dashes[0] = 2;
-        dashes[1] = 7;
-        cairo_set_dash(cr, dashes, 2, 0);
-        cairo_move_to(cr, 0, 0);
-        cairo_rel_line_to(cr, 0, -WXR_RES_Y);
-        cairo_stroke(cr);
-        cairo_set_dash(cr, NULL, 0, 0);
-
-        dashes[0] = 2;
-        dashes[1] = 10;
-        cairo_set_dash(cr, dashes, 2, 0);
-        for (int i = 0; i < 4; i++) {
-            cairo_arc(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(220),
-                DEG2RAD(270));
+        if(sys.cur_mode == 1){
+            cairo_save(cr);
+            cairo_move_to(cr, 0, 0);
+            double r = (WXR_RES_Y /4);
+            cairo_set_source_rgb(cr, GREEN_RGB(scr));
+            cairo_set_line_width(cr, WXR_RES_Y / 8);
+			cairo_stroke(cr);
+            cairo_arc(cr, 0, 0, r, DEG2RAD(220), DEG2RAD(320));
             cairo_stroke(cr);
-        }
-        for (int i = 0; i < 4; i++) {
-            cairo_arc_negative(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(320),
-                DEG2RAD(270));
+
+            cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+            cairo_arc(cr, 0, 0, r*1.5, DEG2RAD(220), DEG2RAD(320));
             cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, RED_RGB(scr));
+            cairo_arc(cr, 0, 0, r*2, DEG2RAD(220), DEG2RAD(320));
+            cairo_stroke(cr);
+
+            cairo_set_source_rgb(cr, PURPLE_RGB(scr));
+            cairo_arc(cr, 0, 0, r*2.5, DEG2RAD(220), DEG2RAD(320));
+            cairo_stroke(cr);
+
+            cairo_restore(cr);
         }
-        cairo_set_dash(cr, NULL, 0, 0);
 
-        snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
-        align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 +
-            27, TEXT_ALIGN_RIGHT);
-        cairo_show_text(cr, buf);
+			if(sys.trk_timer_flag == B_TRUE){
+			cairo_set_source_rgb(cr, YELLOW_RGB(scr));
+			dashes[0] = 3;
+			dashes[1] = 3;
+			cairo_set_line_width(cr, 2);
+			cairo_save(cr);
+			cairo_move_to(cr, 0, 0);
+			cairo_rotate(cr, DEG2RAD(sys.trk));
+			cairo_rel_line_to(cr, 0, -WXR_RES_Y);
+			cairo_stroke(cr);
+			cairo_restore(cr);
 
-        snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - sys.range/4) );
-        align_text(cr, buf, WXR_RES_X / 2.45, -((WXR_RES_Y)/ 4) * 2 + 25
-            , TEXT_ALIGN_LEFT);
-        cairo_show_text(cr, buf);
+				snprintf(buf, sizeof (buf), "%2u\u00B0", ABS(sys.trk));
+				align_text(cr, buf, -WXR_RES_X / 2 + FONT_SZ*2, -WXR_RES_Y - TOP_OFFSET*2 +
+				LINE_HEIGHT,
+					TEXT_ALIGN_RIGHT);
+				cairo_show_text(cr, buf);
 
-        snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range - (sys.range/4)*2 ) );
-        align_text(cr, buf, WXR_RES_X / 3.2, -(WXR_RES_Y/ 4)
-            , TEXT_ALIGN_LEFT);
-        cairo_show_text(cr, buf);
+			}
 
-        snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - (sys.range/4)*3 ) );
-        align_text(cr, buf, WXR_RES_X / 6.8, -(WXR_RES_Y/ 4) / 2 + 10
-            , TEXT_ALIGN_LEFT);
-        cairo_show_text(cr, buf);
+			cairo_set_source_rgb(cr, CYAN_RGB(scr));
+			dashes[0] = 2;
+			dashes[1] = 7;
+			cairo_set_dash(cr, dashes, 2, 0);
+			cairo_move_to(cr, 0, 0);
+			cairo_rel_line_to(cr, 0, -WXR_RES_Y);
+			cairo_stroke(cr);
+			cairo_set_dash(cr, NULL, 0, 0);
 
-        mutex_enter(&sys.mode_lock);
-        strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
-        mutex_exit(&sys.mode_lock);
+			dashes[0] = 2;
+			dashes[1] = 10;
+			cairo_set_dash(cr, dashes, 2, 0);
+			for (int i = 0; i < 4; i++) {
+				cairo_arc(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(220),
+					DEG2RAD(270));
+				cairo_stroke(cr);
+			}
+			for (int i = 0; i < 4; i++) {
+				cairo_arc_negative(cr, 0, 0, (WXR_RES_Y / 4) * (i + 1), DEG2RAD(320),
+					DEG2RAD(270));
+				cairo_stroke(cr);
+			}
+			cairo_set_dash(cr, NULL, 0, 0);
 
-        align_text(cr, mode_name, -WXR_RES_X / 2, -60, TEXT_ALIGN_LEFT);
-        cairo_show_text(cr, mode_name);
+			snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
+			align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 +
+				27, TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
 
-        if (wxr != NULL) {
-            double tilt = wxr_intf->get_ant_pitch(wxr);
-            vect3_t pos;
-            vect2_t lim;
+			snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - sys.range/4) );
+			align_text(cr, buf, WXR_RES_X / 2.45, -((WXR_RES_Y)/ 4) * 2 + 25
+				, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
 
-            if (tilt >= 0.05)
-                snprintf(buf, sizeof (buf), "UP %.1f\u00B0", tilt);
-            else if (tilt <= -0.05)
-                snprintf(buf, sizeof (buf), "DN %.1f\u00B0", ABS(tilt));
-            else
-                snprintf(buf, sizeof (buf), "0.0\u00B0");
-            align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 , TEXT_ALIGN_RIGHT);
-            cairo_show_text(cr, buf);
+			snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range - (sys.range/4)*2 ) );
+			align_text(cr, buf, WXR_RES_X / 3.2, -(WXR_RES_Y/ 4)
+				, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
 
-            snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr));
-            align_text(cr, buf, -WXR_RES_X / 2, -20,
-                TEXT_ALIGN_LEFT);
-            cairo_show_text(cr, buf);
+			snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - (sys.range/4)*3 ) );
+			align_text(cr, buf, WXR_RES_X / 6.8, -(WXR_RES_Y/ 4) / 2 + 10
+				, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+			mutex_enter(&sys.mode_lock);
+			strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
+			mutex_exit(&sys.mode_lock);
+
+			align_text(cr, mode_name, -WXR_RES_X / 2, -60, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, mode_name);
+
+			if (sys.nav == 1){
+				cairo_set_font_size(cr, FONT_SZ - 5);
+				snprintf(buf, sizeof (buf), "NO NAV");
+				align_text(cr, buf, -WXR_RES_X / 2, -60 + FONT_SZ, TEXT_ALIGN_LEFT);
+				cairo_show_text(cr, buf);
+				cairo_set_font_size(cr, FONT_SZ);
+			}
+
+			vect3_t pos;
+			vect2_t lim;
+
+			if (sys.tilt >= 0.05)
+				snprintf(buf, sizeof (buf), "UP %.1f\u00B0", sys.tilt);
+			else if (sys.tilt <= -0.05)
+				snprintf(buf, sizeof (buf), "DN %.1f\u00B0", ABS(sys.tilt));
+			else
+				snprintf(buf, sizeof (buf), "0.0\u00B0");
+			align_text(cr, buf, WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 , TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+
+			snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr));
+			align_text(cr, buf, -WXR_RES_X / 2, -20,
+				TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
 
 
-            wxr_intf->get_acf_pos(wxr, &NULL_GEO_POS3, &pos);
-            wxr_intf->get_stab(wxr, &lim.x, &lim.y);
+			wxr_intf->get_acf_pos(wxr, &NULL_GEO_POS3, &pos);
+			wxr_intf->get_stab(wxr, &lim.x, &lim.y);
 
-            if(lim.x == 0 || lim.x == 0){
-             snprintf(buf, sizeof (buf), "STAB OFF");// (1 == 0) ?("ON") :("OFF")
-            align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2,
-                TEXT_ALIGN_LEFT);
-            cairo_show_text(cr, buf);
-            }
-            else if(ABS(pos.x) > lim.x || ABS(pos.z) > lim.y){
-            snprintf(buf, sizeof (buf), "STAB LMT");
-            align_text(cr, buf, WXR_RES_X / 2, -20,
-                TEXT_ALIGN_RIGHT);
-            cairo_show_text(cr, buf);
-            }
-        }
+			if(lim.x == 0 || lim.x == 0){
+			 snprintf(buf, sizeof (buf), "STAB OFF");// (1 == 0) ?("ON") :("OFF")
+			align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2,
+				TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+			}
+			else if(ABS(pos.x) > lim.x || ABS(pos.z) > lim.y){
+			snprintf(buf, sizeof (buf), "STAB LMT");
+			align_text(cr, buf, WXR_RES_X / 2, -20,
+				TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+			}
+		}
+		else{
+
+			cairo_set_source_rgb(cr, CYAN_RGB(scr));
+
+/* 			dashes[0] = 6;
+			dashes[1] = 3;
+			cairo_set_dash(cr, dashes, 2, 0);
+			cairo_move_to(cr, -WXR_RES_X/2, -WXR_RES_Y/2);
+			cairo_save(cr);
+			cairo_rotate(cr, DEG2RAD(65));
+			cairo_rel_line_to(cr, 0, -WXR_RES_X*0.87);
+			cairo_stroke(cr);
+			cairo_restore(cr);
+			cairo_move_to(cr, -WXR_RES_X/2, -WXR_RES_Y/2);
+			cairo_save(cr);
+			cairo_rotate(cr, DEG2RAD(115));
+			cairo_rel_line_to(cr, 0, -WXR_RES_X*0.87);
+			cairo_stroke(cr);
+			cairo_restore(cr); */
+			dashes[0] = 2;
+			dashes[1] = 7;
+			cairo_set_dash(cr, dashes, 2, 0);
+			for(unsigned i = 1; i < 4; i++){
+				cairo_move_to(cr, (-WXR_RES_X/2) + (WXR_RES_X * scr->vert_mode_scale / 4)  , -WXR_RES_Y / 4 * i);
+				cairo_rel_line_to(cr, WXR_RES_X * scr->vert_mode_scale * 0.75, 0);
+				cairo_stroke(cr);
+			}
+				int alt = roundmul(MET2FEET(sys.range/4.05)/1000, 5);
+				snprintf(buf, sizeof (buf), "+%d", alt);
+				align_text(cr, buf, (WXR_RES_X/3)+FONT_SZ/2, -WXR_RES_Y/4*3,
+					TEXT_ALIGN_LEFT);
+				cairo_show_text(cr, buf);
+				cairo_stroke(cr);
+				snprintf(buf, sizeof (buf), "0");
+				align_text(cr, buf, (WXR_RES_X/3)+FONT_SZ, -WXR_RES_Y/2,
+					TEXT_ALIGN_LEFT);
+				cairo_show_text(cr, buf);
+				cairo_stroke(cr);
+				snprintf(buf, sizeof (buf), "-%d", alt);
+				align_text(cr, buf, (WXR_RES_X/3)+FONT_SZ/2, -WXR_RES_Y/4,
+					TEXT_ALIGN_LEFT);
+				cairo_show_text(cr, buf);
+				cairo_stroke(cr);
+
+
+			for (int i = 0; i < 4; i++) {
+				double x = 0;
+				double y = 0;
+				cairo_arc(cr, -WXR_RES_X/2, -WXR_RES_Y/2, (WXR_RES_X / 4) * (i + 1) * scr->vert_mode_scale, DEG2RAD(-30),
+					DEG2RAD(30));
+				cairo_get_current_point(cr, &x, &y);
+				cairo_stroke(cr);
+				if(i < 3){
+					snprintf(buf, sizeof (buf), "%.3g", MET2NM((sys.range/4)*(i+1) ));
+					align_text(cr, buf, x , y + FONT_SZ/2 - 5 , TEXT_ALIGN_RIGHT);
+					cairo_show_text(cr, buf);
+				}
+				else{
+					snprintf(buf, sizeof (buf), "%.3g", MET2NM((sys.range/4)*(i+1) ));
+					align_text(cr, buf, x + FONT_SZ + 2, y - FONT_SZ*2 + FONT_SZ/2 , TEXT_ALIGN_LEFT);
+					cairo_show_text(cr, buf);
+				}
+
+				cairo_stroke(cr);
+				//cairo_restore(cr);
+			}
+
+			cairo_set_dash(cr, NULL, 0, 0);
+
+			vect3_t pos;
+			vect2_t lim;
+
+			mutex_enter(&sys.mode_lock);
+			strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
+			mutex_exit(&sys.mode_lock);
+
+			align_text(cr, mode_name, -WXR_RES_X / 2, -60, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, mode_name);
+
+			snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr) - 0.5);
+			align_text(cr, buf, -WXR_RES_X / 2, -20,
+				TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+
+			wxr_intf->get_acf_pos(wxr, &NULL_GEO_POS3, &pos);
+			wxr_intf->get_stab(wxr, &lim.x, &lim.y);
+
+
+			snprintf(buf, sizeof (buf), "PROFILE");// (1 == 0) ?("ON") :("OFF")
+			align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2,
+				TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+			snprintf(buf, sizeof (buf), "R %+2d", sys.trk);// (1 == 0) ?("ON") :("OFF")
+			align_text(cr, buf, -WXR_RES_X / 2, -WXR_RES_Y - TOP_OFFSET*2 + FONT_SZ,
+				TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+			if((ABS(pos.x) > lim.x || ABS(pos.z) > lim.y) && lim.x > 0 && lim.y > 0){
+			snprintf(buf, sizeof (buf), "STAB LMT");
+			align_text(cr, buf, WXR_RES_X / 2, -40,
+				TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+			}
+		}
 
         break;
-        case WXR270: ;
-        int offset = -10;
+        case WXR270:
 
         cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
         cairo_set_font_size(cr, FONT_SZ);
@@ -969,29 +1152,361 @@ render_ui(cairo_t *cr, wxr_scr_t *scr)
                 cairo_stroke(cr);
                 cairo_restore(cr);
         }
-        if (wxr != NULL) {
-            cairo_save(cr);
-            double tilt = wxr_intf->get_ant_pitch(wxr);
-            if(sys.cur_mode == 4) cairo_set_source_rgb(cr, GREEN2_RGB(scr) );
-            else cairo_set_source_rgb(cr, CYAN2_RGB(scr) );
-            if (tilt >= 0.05)
-                snprintf(buf, sizeof (buf), "%.1f\u2191", tilt);
-            else if (tilt <= -0.05)
-                snprintf(buf, sizeof (buf), "%.1f\u2193", ABS(tilt));
-            else
-                snprintf(buf, sizeof (buf), "0.0\u00a0");
-            align_text(cr, buf, WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_RIGHT);
-            cairo_show_text(cr, buf);
-            snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr) - MIN_GAIN);
-            align_text(cr, buf, -WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_LEFT);
-            cairo_show_text(cr, buf);
-            cairo_stroke(cr);
-            cairo_restore(cr);
-        }
+        cairo_save(cr);
+
+        if(sys.cur_mode == 4) cairo_set_source_rgb(cr, GREEN2_RGB(scr) );
+        else cairo_set_source_rgb(cr, CYAN2_RGB(scr) );
+        if (sys.tilt >= 0.05)
+            snprintf(buf, sizeof (buf), "%.1f\u2191", sys.tilt);
+        else if (sys.tilt <= -0.05)
+            snprintf(buf, sizeof (buf), "%.1f\u2193", ABS(sys.tilt));
+        else
+            snprintf(buf, sizeof (buf), "0.0\u00a0");
+        align_text(cr, buf, WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_RIGHT);
+        cairo_show_text(cr, buf);
+        snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr) - MIN_GAIN);
+        align_text(cr, buf, -WXR_RES_X / 2, -FONT_SZ/2, TEXT_ALIGN_LEFT);
+        cairo_show_text(cr, buf);
+        cairo_stroke(cr);
+        cairo_restore(cr);
+
+        break;
+	case KONTUR:
+			cairo_set_font_face(cr, fontmgr_get(FONTMGR_EFIS_FONT));
+			cairo_set_font_size(cr, FONT_SZ);
+			cairo_text_extents_t tx;
+
+		   // draw own plane
+			cairo_set_source_rgb(cr, CYAN_RGB(scr));
+			cairo_set_line_width(cr, 4);
+			cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+			cairo_move_to(cr, 0, -5);
+			cairo_rel_line_to(cr, 0, -15);
+			cairo_move_to(cr, 0, -17);
+			cairo_rel_line_to(cr, -7, 7);
+			cairo_move_to(cr, 0, -17);
+			cairo_rel_line_to(cr, 7, 7);
+			cairo_stroke(cr);
+			cairo_set_line_width(cr, 3);
+			cairo_move_to(cr, 0, -5);
+			cairo_rel_line_to(cr, -4, 3);
+			cairo_move_to(cr, 0, -5);
+			cairo_rel_line_to(cr, 4, 3);
+			cairo_stroke(cr);
+	//----------------------------------------------------------//
+
+			if(sys.trk_timer_flag == B_TRUE){
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			dashes[0] = 3;
+			dashes[1] = 3;
+			cairo_set_line_width(cr, 2);
+			cairo_save(cr);
+			cairo_move_to(cr, 0, -20);
+			cairo_rotate(cr, DEG2RAD(sys.trk));
+			cairo_rel_line_to(cr, 0, -WXR_RES_Y + 20);
+			cairo_stroke(cr);
+			cairo_restore(cr);
+
+	//            snprintf(buf, sizeof (buf), "%2u\u00B0", ABS(sys.trk));
+	//            align_text(cr, buf, -WXR_RES_X / 2 + FONT_SZ*2, -WXR_RES_Y - TOP_OFFSET*2 +
+	//            LINE_HEIGHT,
+	//                TEXT_ALIGN_RIGHT);
+	//            cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, WXR_RES_X/2 - 51, -53 , 50, 14);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 10);
+			snprintf(buf, sizeof (buf), "Azim");
+			align_text(cr, buf, WXR_RES_X/2 - 48, -47, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, FONT_SZ/2);
+			snprintf(buf, sizeof (buf), "%+i", sys.trk);
+			align_text(cr, buf, WXR_RES_X/2 - strlen(buf)/2 - 2 , -47, TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+			}
+
+			cairo_set_dash(cr, NULL, 0, 0);
+			cairo_stroke(cr);
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			  dashes[0] = 2;
+			  dashes[1] = 10;
+			cairo_set_dash(cr, dashes, 2, 0);
+			cairo_set_font_size(cr, FONT_SZ);
+			for (int i = 0; i < 4; i++) {
+
+				cairo_set_source_rgb(cr, CYAN_RGB(scr));
+				cairo_arc(cr, 0, -20, ((WXR_RES_Y - 20) / 4) * (i + 1), DEG2RAD(210),
+					DEG2RAD(330));
+				cairo_stroke(cr);
+				if(i < 3){
+					double r = ((WXR_RES_Y - 20) / 4) * (i + 1);
+					double ang = DEG2RAD(-120);
+					double x = r*sin(ang);
+					double y = r*cos(ang);
+					cairo_set_source_rgb(cr, BLUE_RGB(scr));
+					snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range)/4*(i+1));
+					align_text(cr, buf, x - strlen(buf)/2, y - FONT_SZ/4, TEXT_ALIGN_CENTER); // + strlen(buf)/2
+					cairo_show_text(cr, buf);
+					cairo_stroke(cr);
+				}
+
+			}
+			cairo_set_dash(cr, NULL, 0, 0);
+
+	//        cairo_set_line_width(cr, 2);
+	//        cairo_set_source_rgb(cr, WHITE_RGB(scr));
+	//        cairo_rectangle(cr, -WXR_RES_X/2+1, -WXR_RES_Y/2 - 15, 38, 25);
+	//        cairo_stroke_preserve(cr);
+	//        cairo_set_source_rgb(cr, GRAY_RGB(scr));
+	//        cairo_fill(cr);
+	//        cairo_set_font_size(cr, 12);
+	//        cairo_set_source_rgb(cr, WHITE_RGB(scr));
+	//        snprintf(buf, sizeof (buf), "NO");
+	//        align_text(cr, buf, -WXR_RES_X/2+3 , -WXR_RES_Y/2 - 10 , TEXT_ALIGN_LEFT);
+	//        cairo_show_text(cr, buf);
+	//        snprintf(buf, sizeof (buf), "TAWS");
+	//        align_text(cr, buf, -WXR_RES_X/2+3, -WXR_RES_Y/2 + 4, TEXT_ALIGN_LEFT);
+	//        cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, -WXR_RES_X/2 + 1, -WXR_RES_Y + 70, 30, 30);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 15);
+			snprintf(buf, sizeof (buf), "%3.0f", MET2NM(sys.range) );
+			align_text(cr, buf, -WXR_RES_X/2 + 15, -WXR_RES_Y + 77, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf);
+			snprintf(buf, sizeof (buf), "nm");
+			align_text(cr, buf, -WXR_RES_X/2 + 15, -WXR_RES_Y + 93, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf);
+			cairo_stroke(cr);
+	//----------------------------------------------------------//
+	//        cairo_set_source_rgb(cr, WHITE_RGB(scr));
+	//        cairo_rectangle(cr, WXR_RES_X/2 - 41, -WXR_RES_Y/3, 40, 20);
+	//        cairo_stroke_preserve(cr);
+	//        cairo_set_source_rgb(cr, GRAY_RGB(scr));
+	//        cairo_fill(cr);
+	//        cairo_set_source_rgb(cr, WHITE_RGB(scr));
+	//        cairo_set_font_size(cr, 15);
+	//        snprintf(buf, sizeof (buf), "TCAS");
+	//        align_text(cr, buf, WXR_RES_X/2 - 2, -WXR_RES_Y/3 + 9, TEXT_ALIGN_RIGHT);
+	//        cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			cairo_set_font_size(cr, 15);
+
+			snprintf(buf, sizeof (buf), "%3.0f\u00B0", dr_getf(&drs.hdg) );
+			cairo_text_extents(cr, buf, &tx);
+			cairo_rectangle(cr, -tx.width/2 - 2, -WXR_RES_Y + tx.height/2, tx.x_advance + 2, tx.height*1.2);
+			cairo_set_source_rgb(cr, 0, 0, 0);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			align_text(cr, buf, 0, -WXR_RES_Y + tx.height, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf);
+			cairo_stroke(cr);
+/* 			snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - (sys.range/4)) );
+			cairo_text_extents(cr, buf, &tx);
+
+			cairo_rectangle(cr, -WXR_RES_X / 2, -104, tx.width, tx.height*1.5);
+			cairo_set_source_rgb(cr, 0, 0, 0);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+
+			align_text(cr, buf, -WXR_RES_X / 2, -95
+				, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+			snprintf(buf, sizeof (buf), "%2.0f", MET2NM(sys.range - (sys.range/4)*2 ) );
+			cairo_text_extents(cr, buf, &tx);
+			cairo_rectangle(cr, -WXR_RES_X / 3 - tx.width/2, -74, tx.width, tx.height*1.5);
+			cairo_set_source_rgb(cr, 0, 0, 0);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			align_text(cr, buf, -WXR_RES_X / 3, -65
+				, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf);
+
+
+			snprintf(buf, sizeof (buf), "%.3g", MET2NM(sys.range - (sys.range/4)*3 ) );
+			cairo_text_extents(cr, buf, &tx);
+			cairo_rectangle(cr, -WXR_RES_X / 6 - tx.width/2, -44, tx.width, tx.height*1.5);
+			cairo_set_source_rgb(cr, 0, 0, 0);
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			align_text(cr, buf, -WXR_RES_X / 6, -35
+				, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf); */
+
+
+			mutex_enter(&sys.mode_lock);
+			strlcpy(mode_name, sys.aux[sys.cur_mode].name, sizeof (mode_name));
+			mutex_exit(&sys.mode_lock);
+
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, WXR_RES_X/2 - 61, -19 , 60, 18);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 15);
+			align_text(cr, mode_name, WXR_RES_X/2 - 30, -10, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, mode_name);
+	//----------------------------------------------------------//
+	//
+	//        align_text(cr, mode_name, WXR_RES_X / 2, -20 , TEXT_ALIGN_RIGHT);
+	//        cairo_show_text(cr, mode_name);
+
+			if (wxr != NULL && sys.cur_mode > 0) {
+
+				vect3_t pos;
+				vect2_t lim;
+
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, WXR_RES_X/2 - 103, -19 , 41, 18);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 15);
+			snprintf(buf, sizeof (buf), "WXr");
+			align_text(cr, buf, WXR_RES_X/2 - 97, -10, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+	//----------------------------------------------------------//
+
+	//----------------------------------------------------------//
+			if (strcmp(mode_name,"MAP") == 0) {
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_rectangle(cr, -WXR_RES_X/3.8, -15 , 70, 14);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+
+			cairo_rectangle(cr, -WXR_RES_X/3.8, -15 , 70*sys.sepn, 14);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 12);
+			snprintf(buf, sizeof (buf), "Separation");
+			align_text(cr, buf, -WXR_RES_X/3.8 + 2, -8, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, -WXR_RES_X/2+1, -15 , 70, 14);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_rectangle(cr, -WXR_RES_X/2+1, -15 , 70*(wxr_intf->get_gain(wxr)-0.5), 14);
+			cairo_set_source_rgb(cr, BLUE_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 12);
+			snprintf(buf, sizeof (buf), "Gain");
+			align_text(cr, buf, -WXR_RES_X/2 + 20, -9, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+			}else{
+				if(wxr_intf->get_gain(wxr) != DFL_GAIN){
+					cairo_set_line_width(cr, 2);
+					cairo_set_source_rgb(cr, WHITE_RGB(scr));
+					cairo_rectangle(cr, -WXR_RES_X/2+1, -15 , 70, 14);
+					cairo_stroke_preserve(cr);
+					cairo_set_source_rgb(cr, GRAY_RGB(scr));
+					cairo_fill(cr);
+					cairo_rectangle(cr, -WXR_RES_X/2+1, -15 , 70*(wxr_intf->get_gain(wxr)-0.5), 14);
+					cairo_set_source_rgb(cr, LIGHT_BLUE_RGB(scr));
+					cairo_fill(cr);
+					cairo_set_source_rgb(cr, WHITE_RGB(scr));
+					cairo_set_font_size(cr, 12);
+					snprintf(buf, sizeof (buf), "Gain");
+					align_text(cr, buf, -WXR_RES_X/2 + 20, -9, TEXT_ALIGN_LEFT);
+					cairo_show_text(cr, buf);
+				}
+			}
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_rectangle(cr, WXR_RES_X/2 - 61, -36 , 60, 14);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 10);
+			snprintf(buf, sizeof (buf), "Tilt");
+			align_text(cr, buf, WXR_RES_X/2 - 59, -29, TEXT_ALIGN_LEFT);
+			cairo_show_text(cr, buf);
+
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 10);
+			snprintf(buf, sizeof (buf), "%+2.2f", sys.tilt);
+			align_text(cr, buf, WXR_RES_X/2 - strlen(buf)/2 - 2 , -29, TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+
+	//            snprintf(buf, sizeof (buf), "%1.1f", wxr_intf->get_gain(wxr));
+	//            align_text(cr, buf, -WXR_RES_X / 2, -20,
+	//                TEXT_ALIGN_LEFT);
+	//            cairo_show_text(cr, buf);
+				wxr_intf->get_acf_pos(wxr, &NULL_GEO_POS3, &pos);
+				wxr_intf->get_stab(wxr, &lim.x, &lim.y);
+
+				if(lim.x == 0 || lim.y == 0){
+	//----------------------------------------------------------//
+			cairo_set_line_width(cr, 2);
+			cairo_rectangle(cr, WXR_RES_X/2 - 36, -140 , 35, 30);
+			cairo_stroke_preserve(cr);
+			cairo_set_source_rgb(cr, GRAY_RGB(scr));
+			cairo_fill(cr);
+			cairo_set_source_rgb(cr, WHITE_RGB(scr));
+			cairo_set_font_size(cr, 12);
+			snprintf(buf, sizeof (buf), "Stab.");
+			align_text(cr, buf, WXR_RES_X/2 - 2, -133, TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+			snprintf(buf, sizeof (buf), "Off");
+			align_text(cr, buf, WXR_RES_X/2 - 2, -118, TEXT_ALIGN_RIGHT);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+				}
+				else if(ABS(pos.x) > lim.x || ABS(pos.z) > lim.y){
+	//----------------------------------------------------------//
+			cairo_select_font_face(cr, "Sans",
+				CAIRO_FONT_SLANT_NORMAL,
+				CAIRO_FONT_WEIGHT_BOLD);
+			cairo_set_source_rgb(cr, 1, 0, 0);
+			cairo_set_font_size(cr, 20);
+			snprintf(buf, sizeof (buf), "STAB LIMIT");
+			align_text(cr, buf, 0, -WXR_RES_Y/2, TEXT_ALIGN_CENTER);
+			cairo_show_text(cr, buf);
+	//----------------------------------------------------------//
+				}
+			}
+
         break;
     default:
         break;
     }
+	}
 }
 
 static void
@@ -1076,6 +1591,10 @@ parse_conf_file(const conf_t *conf)
 		    &mode->scan_angle, i);
 		mode->scan_angle = clamp(mode->scan_angle, 1, 180);
 
+		conf_get_d_v(conf, "mode/%d/scan_angle_vert",
+		    &mode->scan_angle_vert, i);
+		mode->scan_angle_vert = clamp(mode->scan_angle_vert, 1, 180);
+
 		conf_get_d_v(conf, "mode/%d/smear/x", &mode->smear.x, i);
 		conf_get_d_v(conf, "mode/%d/smear/y", &mode->smear.y, i);
 		mode->smear.x = clamp(mode->smear.x, 0, 100);
@@ -1138,15 +1657,24 @@ parse_conf_file(const conf_t *conf)
 		strlcpy(sys.mode_dr.name, str, sizeof (sys.mode_dr.name));
 	if (conf_get_str(conf, "gain_dr", &str))
 		strlcpy(sys.gain_dr.name, str, sizeof (sys.gain_dr.name));
+	if (conf_get_str(conf, "sepn_dr", &str))
+		strlcpy(sys.sepn_dr.name, str, sizeof (sys.sepn_dr.name));
     if (conf_get_str(conf, "trk_dr", &str))
 		strlcpy(sys.trk_dr.name, str, sizeof (sys.trk_dr.name));
     if (conf_get_str(conf, "stab_dr", &str))
 		strlcpy(sys.stab_dr.name, str, sizeof (sys.stab_dr.name));
+    if (conf_get_str(conf, "nav_dr", &str))
+		strlcpy(sys.nav_dr.name, str, sizeof (sys.nav_dr.name));
+	else sys.nav = 0;
+    if (conf_get_str(conf, "vp_dr", &str))
+		strlcpy(sys.vp_dr.name, str, sizeof (sys.vp_dr.name));
+	else sys.vp = 0;
 	conf_get_d(conf, "gain_auto_pos", &sys.gain_auto_pos);
 	conf_get_d(conf, "alert_rate", &sys.alert_rate);
 	sys.alert_rate = MAX(sys.alert_rate, 1);
 	conf_get_d(conf, "tilt_rate", &sys.tilt_rate);
 	sys.tilt_rate = MAX(sys.tilt_rate, 1);
+	conf_get_b(conf, "shadow_enable", &sys.shadow_enable);
 
 	conf_get_d(conf, "ctl/delay/power_sw", &sys.power_sw_ctl.delay);
 	conf_get_d(conf, "ctl/delay/mode", &sys.mode_ctl.delay);
@@ -1157,7 +1685,7 @@ parse_conf_file(const conf_t *conf)
 	sys.num_screens = clampi(sys.num_screens, 0, MAX_SCREENS);
 
     if (conf_get_i(conf, "ui/style", (int *)&sys.ui_style))
-	sys.ui_style = clampi(sys.ui_style, 0, 2);
+	sys.ui_style = clampi(sys.ui_style, 0, 3);
 	else sys.ui_style = 0;
 	for (unsigned i = 0; i < sys.num_screens; i++) {
 		wxr_scr_t *scr = &sys.screens[i];
@@ -1212,6 +1740,9 @@ parse_conf_file(const conf_t *conf)
 
 		scr->scale = 1.0;
 		conf_get_d_v(conf, "scr/%d/scale", &scr->scale, i);
+
+		scr->vert_mode_scale = 1.0;
+		conf_get_d_v(conf, "scr/%d/vert_mode_scale", &scr->vert_mode_scale, i);
 	}
 }
 
@@ -1267,7 +1798,7 @@ sa_init(const conf_t *conf)
 	XPLMRegisterFlightLoopCallback(floop_cb, -1, NULL);
 	XPLMRegisterFlightLoopCallback(trk_timer_cb, 0, NULL);
 	XPLMRegisterFlightLoopCallback(alert_timer_cb, 0, NULL);
-	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Panel, 0, NULL);//xplm_Phase_Gauges
+	XPLMRegisterDrawCallback(draw_cb, xplm_Phase_Gauges, 0, NULL);//xplm_Phase_Panel
 
 	return (B_TRUE);
 errout:
@@ -1284,11 +1815,15 @@ sa_fini(void)
 
 	XPLMUnregisterCommandHandler(open_debug_cmd, open_debug_win, 0, NULL);
 
-	for(unsigned i = 0; i < cdrs.num_int; i++){
-        dr_delete(&cdrs.drefs_int[i]);
+	if(cdrs.num_int > 0){
+		for(unsigned i = 0; i < cdrs.num_int; i++){
+			dr_delete(&cdrs.drefs_int[i]);
+		}
 	}
-	for(unsigned i = 0; i < cdrs.num_float; i++){
-        dr_delete(&cdrs.drefs_float[i]);
+	if(cdrs.num_float > 0){
+		for(unsigned i = 0; i < cdrs.num_float; i++){
+			dr_delete(&cdrs.drefs_float[i]);
+		}
 	}
 
 	for (unsigned i = 0; i < sys.num_screens; i++) {

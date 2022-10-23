@@ -394,7 +394,7 @@ update_efis(void)
 	if (dr_geti(&drs.EFIS.mode) != EFIS_MODE_NORM)
 		dr_seti(&drs.EFIS.mode, EFIS_MODE_NORM);
 	if (dr_geti(&drs.EFIS.submode) != EFIS_SUBMODE_GOOD_MAP)
-		dr_seti(&drs.EFIS.submode, EFIS_SUBMODE_GOOD_MAP);
+        dr_seti(&drs.EFIS.submode, EFIS_SUBMODE_GOOD_MAP);
 	if (dr_geti(&drs.EFIS.range) != (int)xp11_atmo.range_i)
 		dr_seti(&drs.EFIS.range, xp11_atmo.range_i);
 	if (dr_geti(&drs.EFIS.shows_wx) != (int)mode)

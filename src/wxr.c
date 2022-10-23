@@ -436,7 +436,7 @@ wxr_worker(void *userinfo)
 				ground_return[k] = ((1 - energy_spent[k]) *
 				    fract_hit * (fract_dir + 0.8) /
 				    NUM_VERT_SECTORS) * GROUND_RETURN_MULT *
-				    (1 - wxr->tp.out_water[j] * 0.95);
+				    (1 - wxr->tp.out_water[j] * 0.97);
 			}
 
 			for (int k = 0; k < NUM_VERT_SECTORS; k++) {
